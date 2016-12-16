@@ -1,0 +1,3054 @@
+<apex:page sidebar="false" controller="FL_LocalWorkspaceController" tabStyle="FL_Local_Workspace__tab" action="{!checkAuthentication}" doctype="html-5.0">
+    <style>
+        div .pagination {
+            text-align: center;
+        }
+        [ng\:cloak], [ng-cloak], [data-ng-cloak], [x-ng-cloak], .ng-cloak, .x-ng-cloak {
+          display: none !important;
+        }
+        .daysLabel{
+            color: rgb(79, 74, 96);
+            font-size: 11px;
+        }
+        span#filterLabelId-_help {
+            margin-right: 24px;
+        }
+        td.filterheaderclass {
+            padding-left: 15px;
+        }
+        th.filterheaderclass {
+            padding-left: 15px;
+        }
+        label.filterLabelLogiclabel {
+            color: rgb(79, 74, 96);
+            font-size: 11px;
+        }
+        th.filterheaderclass {
+            color: rgb(79, 74, 96);
+            font-size: 11px;
+        }
+    </style>
+    
+    <link rel="stylesheet" href="//code.jquery.com/ui/1.11.4/themes/smoothness/jquery-ui.css" />
+<!--        <script src="//code.jquery.com/jquery-1.10.2.js"></script> -->
+    <script src="//code.jquery.com/ui/1.11.4/jquery-ui.js"></script>
+<!--        <link rel="stylesheet" href="/resources/demos/style.css" /> -->
+  
+    <apex:includeScript value="{!URLFOR($Resource.FL_FlosumJS, 'jszip-master/dist/jszip.js')}"/>
+    <apex:includeScript value="{!URLFOR($Resource.FL_FlosumJS,'jszip-master/flosumsf/flosumsf1.6.3.js')}"/>
+    <apex:includeScript value="{!URLFOR($Resource.FL_FlosumJS, 'jszip-master/angular/angular.min.js')}"/>
+    <apex:includeScript value="{!$Resource.FL_X2JS}"/>
+    <c:FL_Wait />
+    <apex:pagemessages id="msg"/>
+    <apex:form rendered="{!isAuthSuccessful}">
+        <div ng-app="localworkspace">
+            <div ng-controller ="RetrieveChangesController" id="angularControllerId">
+                <div class="ng-cloak">
+                    <fieldset ng-disabled="disableUi">
+                        <apex:pageBlock html-ng-show="CommitStep == 1">
+                            <apex:pageBlockbuttons location="top">
+                                <apex:commandbutton value="{!$Label.FL_Retrieve_Changes_from_Local_Org}" onClick="show();" action="{!listMetadataItems}" reRender="msg"  html-ng-disabled="disableRetrieveChangesButton" onComplete="listMetadataItems('{!filterMiliSeconds}',{!IsRetrieveStandard},{!isProcessSuccessful})"/>
+                                <!-- <apex:commandbutton value="Analyze Changes" />  -->
+                                <apex:commandbutton value="{!$Label.FL_Push_to_Remote_Repository}" reRender="none" html-ng-click="startRetrievalForAllSelectedForPush();" onClick="return false;" html-ng-disabled="disablePushButton"/>
+                            </apex:pageBlockbuttons>
+                            <apex:pageBlockSection html-ng-show="!disableRetrieveChangesButton" columns="1">
+                                <apex:pageBlockSectionItem >
+                                    <apex:outputLabel value="Retrieve changes in the last"/>
+                                    <apex:outputPanel ><apex:input label="Retrieve changes in the last" value="{!lastModifiedInDays}" type="number" id="afterDateToFilter" html-min="0" required="true" html-max="3650" styleClass="disableitem"/><apex:outputLabel styleClass="daysLabel" value="days"/></apex:outputPanel>
+                                </apex:pageBlockSectionItem>
+                                <apex:pageBlockSectionItem >
+                                    <apex:outputLabel value="Retrieve standard components"/>
+                                    <apex:inputCheckbox value="{!IsRetrieveStandard}"/>
+                                </apex:pageBlockSectionItem>
+<!--                                <apex:pageBlockSectionItem > -->
+<!--                                    <apex:outPutLabel >All Component Types</apex:outPutLabel> -->
+<!--                                    <input type="radio" ng-model="selectedCategory" value="all"/> -->
+<!--                                </apex:pageBlockSectionItem> -->
+<!--                                <apex:pageBlockSectionItem > -->
+<!--                                    <apex:outPutLabel >Selected Component Types</apex:outPutLabel> -->
+<!--                                    <input type="radio" ng-model="selectedCategory" ng-value="selected"/> -->
+<!--                                </apex:pageBlockSectionItem> -->
+<!--                                <apex:PageBlockSectionItem html-ng-show="selectedCategory == selected"> -->
+<!--                                    <apex:outputLabel /> -->
+<!--                                    <select name="multipleSelect" id="multipleSelect" ng-model="selectedToRetrievChanges" multiple="true" size="20"> -->
+<!--                                        <option ng-repeat="meta in metaTypeLi" value="{{meta}}">{{meta}}</option> -->
+<!--                                    </select> -->
+<!--                                </apex:PageBlockSectionItem> -->
+                                <apex:pageBlockSectionItem >
+                                    <apex:outputPanel >
+                                        <table ng-show="filterList.length > 0">
+                                            <thead>
+                                                <tr>
+                                                    <th class="filterheaderclass"></th>
+                                                    <th class="filterheaderclass">Field</th>
+                                                    <th class="filterheaderclass">Operator</th>
+                                                    <th class="filterheaderclass">Value</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                <tr ng-repeat="filterRow in filterList">
+                                                    <td class="filterheaderclass">{{ $index+1 +'.'}}</td>
+                                                    <td class="filterheaderclass">
+                                                        <select ng-model="filterRow.field">
+                                                            <option value="{{''}}">--None--</option>
+                                                            <option ng-repeat="(key, value) in fieldList" value="{{key}}">{{value}}</option>
+                                                        </select>
+                                                    </td>
+                                                    <td class="filterheaderclass">
+                                                        <select ng-model="filterRow.operator">
+                                                            <option value="{{''}}">--None--</option>
+                                                            <option ng-repeat="operatorOne in compareList" value="{{operatorOne}}">{{operatorOne}}</option>
+                                                        </select>
+                                                    </td>
+                                                    <td class="filterheaderclass">
+                                                        <input type="text" id="jstextbox" ng-model="filterRow.value" class="tagsclass" ng-keyup="callAutoComplete(filterRow.field,filterRow.operator);" autocomplete="on" filterIndex="{{$index}}" size="50"/>
+                                                    </td>
+                                                    <td class="filterheaderclass" ng-show="!enableFilterLogic">
+                                                    AND
+                                                    </td>
+                                                </tr>
+                                            </tbody>
+                                        </table>
+                                    </apex:outputPanel>
+                                </apex:pageBlockSectionItem>
+                                <apex:pageBlockSectionItem >
+                                    <a id="link-2" href="" ng-click="addRowToSearch();">Add Row</a>
+                                </apex:pageBlockSectionItem>
+                                <apex:pageBlockSectionItem >
+                                    <apex:outputPanel >
+                                        <a id="link-2" href="" ng-click="enableFilterLogic = true" ng-show="!enableFilterLogic">Add Filter Logic...</a>
+                                        <a id="link-2" href="" ng-click="enableFilterLogic = false" ng-show="enableFilterLogic">Clear Filter Logic</a>
+                                    </apex:outputPanel>
+                                </apex:pageBlockSectionItem>
+                                <apex:pageBlockSectionItem html-ng-show="enableFilterLogic">
+                                    <apex:outputPanel >
+                                        <apex:outputLabel value="Filter Logic" id="filterLabelId" styleClass="filterLabelLogiclabel"/>
+                                        <span class="helpButton" id="filterLabelId-_help"><img src="/s.gif" alt="" class="helpOrb" title=""/><script>sfdcPage.setHelp('filterLabelId', 'Example:- <br>1. (1 AND 2) OR 3,<br>2. 3 OR (1 AND 2).');</script></span>
+                                        <apex:inputText html-ng-model="filterCondition" size="100"/>
+                                    </apex:outputPanel>
+                                </apex:pageBlockSectionItem>
+                            </apex:pageBlockSection>
+                            <apex:pageBlockSection html-ng-show="metadataTypeOptions.length > 0" columns="1">
+                                <apex:PageBlockSectionItem >
+                                    <apex:outputLabel value="Component Type"/>
+                                    <select ng-model="selectedMetadataType" ng-click="showFirst();">
+                                        <option value="{{''}}">All</option>
+                                        <option ng-repeat="meta in metadataTypeOptions" value="{{meta}}">{{meta}}</option>
+                                    </select>
+                                </apex:PageBlockSectionItem>
+                            </apex:pageBlockSection>
+                            <apex:pageBlockSection html-ng-show="componentList.length > 0" columns="1">
+                                <div>
+                                    <apex:pageBlockSection columns="1">
+                                        <table ng-show="componentList.length > 0" class="list">
+                                            <thead>
+                                                <tr class="headerRow">
+                                                    <th>No.</th>
+                                                    <th><input type="checkbox" ng-click="checkItemAll(isAllChecked,(componentList | filter:filterForSearch | orderBy: orderByColumn :isReverse | limitTo: viewLimit),metaOffSet);" class="psli" ng-model="isAllChecked" >&nbsp;</input></th>
+                                                    <th ng-repeat = "(key, value) in fieldSet">
+                                                        <a ng-click="refreshOrderBy(key)">{{ orderByColumn == key ? isReverse ? value+' ▼' : value+' ▲' : value }}</a>
+                                                    </th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                <tr ng-repeat = "meta in componentList | filter:filterForSearch | orderBy: orderByColumn :isReverse | limitTo: viewLimit" ng-if="$index >= metaOffSet" class="dataRow"
+                                                onmouseover="if (window.hiOn){hiOn(this);} " onmouseout="if (window.hiOff){hiOff(this);} ">
+                                                    <td>{{ $index+1 }}</td>
+                                                    <td><input type="checkbox" class="sli" ng-click="checkUnCheck((componentList | filter:filterForSearch | orderBy: orderByColumn :isReverse | limitTo: viewLimit),metaOffSet);" ng-model="meta.checked"/></td>
+                                                    <td ng-repeat = "(key, value) in fieldSet">
+                                                        {{ meta[key == 'lastModifiedDate'? 'changedOn' : key] }}
+                                                    </td>
+                                                </tr>
+                                            </tbody>
+                                        </table>
+                                    </apex:pageBlockSection>
+                                    <apex:outputPanel html-ng-show="componentList.length > 0" styleClass="pagination" layout="block">
+                                        <apex:commandbutton html-ng-click="showFirst();" onClick="return false;" value="First" reRender="none" html-ng-disabled="isPrevious();"/>
+                                        <apex:commandbutton html-ng-click="listPrevious();" onClick="return false;" value="Previous" reRender="none" html-ng-disabled="isPrevious();"/>
+                                        Total {{(componentList|filter:filterForSearch).length}} components, Page {{currentPageNo((componentList|filter:filterForSearch).length)}} of {{totalPageCount((componentList|filter:filterForSearch).length)}}
+                                        <apex:commandbutton html-ng-click="listNext((componentList|filter:filterForSearch).length);" onClick="return false;" value="Next" reRender="none" html-ng-disabled="isNext((componentList | filter:filterForSearch).length);"/>
+                                        <apex:commandbutton html-ng-click="showLast((componentList|filter:filterForSearch).length);" onClick="return false;" value="Last" reRender="none" html-ng-disabled="isNext((componentList | filter:filterForSearch).length);"/>
+                                    </apex:outputPanel>
+                                </div>
+                            </apex:pageBlockSection>
+                        </apex:pageBlock>
+                        <apex:pageBlock html-ng-show="CommitStep == 2" title="Conflict Resolution">
+                            <apex:pageBlockbuttons location="top">
+                                <apex:commandbutton value="{!$Label.FL_Commit_to_Remote_Repository}" reRender="none" html-ng-click="createSyncRecord();" onClick="return false;" html-ng-disabled="disableCommitButton"/>
+                            </apex:pageBlockbuttons>
+                            <apex:pageBlock title="Components that are safe to commit">
+                                <p>Components which have not been updated in Repository since the last upload.</p>
+                                <apex:pageBlockSection columns="1">
+                                    <table ng-show="safeToCommitLi.length > 0" class="list">
+                                        <thead>
+                                            <tr class="headerRow">
+                                                <th>No.</th>
+                                                <th ng-repeat = "(key, value) in commitFieldSet">
+                                                    <a ng-click="safeRefreshOrderBy(key)">{{ safeOrderByColumn == key ? safeIsReverse ? value+' ▼' : value+' ▲' : value }}</a>
+                                                </th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <tr ng-repeat = "meta in safeToCommitLi | orderBy: safeOrderByColumn : safeIsReverse | limitTo: safeViewLimit" ng-if="$index >= safeMetaOffSet" class="dataRow"
+                                            onmouseover="if (window.hiOn){hiOn(this);} " onmouseout="if (window.hiOff){hiOff(this);} ">
+                                                <td>{{ $index+1 }}</td>
+                                                <td ng-repeat = "(key, value) in commitFieldSet">
+                                                    {{ meta[key] }}
+                                                </td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </apex:pageBlockSection>
+                                <apex:outputPanel html-ng-show="safeToCommitLi.length > 0" styleClass="pagination" layout="block">
+                                    <apex:commandbutton html-ng-click="safeShowFirst();" onClick="return false;" value="First" reRender="none" html-ng-disabled="safeIsPrevious();"/>
+                                    <apex:commandbutton html-ng-click="safeListPrevious();" onClick="return false;" value="Previous" reRender="none" html-ng-disabled="safeIsPrevious();"/>
+                                    Total {{(safeToCommitLi).length}} components, Page {{safeCurrentPageNo((safeToCommitLi).length)}} of {{safeTotalPageCount((safeToCommitLi).length)}}
+                                    <apex:commandbutton html-ng-click="safeListNext((safeToCommitLi).length);" onClick="return false;" value="Next" reRender="none" html-ng-disabled="safeIsNext((safeToCommitLi).length);"/>
+                                    <apex:commandbutton html-ng-click="safeShowLast((safeToCommitLi).length);" onClick="return false;" value="Last" reRender="none" html-ng-disabled="safeIsNext((safeToCommitLi).length);"/>
+                                </apex:outputPanel>
+                            </apex:pageBlock>
+                            <apex:pageBlock title="Components which have updated in Repository, but there is no conflict">
+                                <p>These components will be automatically merged.</p>
+                            </apex:pageBlock>
+                            <apex:pageBlock title="Components which have a conflict">
+                                <p>These components cannot be automatically merged since the same line or XML segment has been updated in the local sandbox and the Repository.</p>
+                            </apex:pageBlock>
+                            <apex:pageBlock title="Components that will not be committed">
+                                <p>The same version of the component has been found in the repository, hence will not be committed.</p>
+                                <apex:pageBlockSection columns="1">
+                                    <table ng-show="notToCommitLi.length > 0" class="list">
+                                        <thead>
+                                            <tr class="headerRow">
+                                                <th>No.</th>
+                                                <th ng-repeat = "(key, value) in notToCommitFieldSet">
+                                                    <a ng-click="notRefreshOrderBy(key)">{{ notOrderByColumn == key ? notIsReverse ? value+' ▼' : value+' ▲' : value }}</a>
+                                                </th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <tr ng-repeat = "meta in notToCommitLi | orderBy: notOrderByColumn : notIsReverse | limitTo: notViewLimit" ng-if="$index >= notMetaOffSet" class="dataRow"
+                                            onmouseover="if (window.hiOn){hiOn(this);} " onmouseout="if (window.hiOff){hiOff(this);} ">
+                                                <td>{{ $index+1 }}</td>
+                                                <td ng-repeat = "(key, value) in notToCommitFieldSet">
+                                                    {{ meta[key] }}
+                                                </td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </apex:pageBlockSection>
+                                <apex:outputPanel html-ng-show="notToCommitLi.length > 0" styleClass="pagination" layout="block">
+                                    <apex:commandbutton html-ng-click="notShowFirst();" onClick="return false;" value="First" reRender="none" html-ng-disabled="notIsPrevious();"/>
+                                    <apex:commandbutton html-ng-click="notListPrevious();" onClick="return false;" value="Previous" reRender="none" html-ng-disabled="notIsPrevious();"/>
+                                    Total {{(notToCommitLi).length}} components, Page {{notCurrentPageNo((notToCommitLi).length)}} of {{notTotalPageCount((notToCommitLi).length)}}
+                                    <apex:commandbutton html-ng-click="notListNext((notToCommitLi).length);" onClick="return false;" value="Next" reRender="none" html-ng-disabled="notIsNext((notToCommitLi).length);"/>
+                                    <apex:commandbutton html-ng-click="notShowLast((notToCommitLi).length);" onClick="return false;" value="Last" reRender="none" html-ng-disabled="notIsNext((notToCommitLi).length);"/>
+                                </apex:outputPanel>
+                            </apex:pageBlock>
+                        </apex:pageBlock>
+                    </fieldset>
+                </div>
+            </div>
+        </div>
+        <apex:actionfunction name="createTempRecordsForCommit" action="{!createTempRecordsForCommit}" rerender="none" oncomplete="checkExceptionOnComplete('{!logId}','{!exceptionMessage}');">
+            <apex:param assignTo="{!commitStr}" value="" name="commitStr"/>
+        </apex:actionfunction>
+        <apex:actionfunction name="createLog" action="{!createLog}" rerender="none" oncomplete="createRequestForRetrieval('{!logId}','{!exceptionMessage}');"/>
+        <apex:actionfunction name="createSyncLog" action="{!createSyncLog}" rerender="none" oncomplete="handleSync('{!syncId}','{!exceptionMessage}');"/>
+        <apex:actionfunction name="finishCommit" action="{!finishCommit}" rerender="none"/>
+    </apex:form>
+    <script>
+        Visualforce.remoting.timeout = 120000;
+        String.prototype.endsWith = function(pattern) {
+            var d = this.length - pattern.length;
+            return d >= 0 && this.lastIndexOf(pattern) === d;
+        };
+        var supportedTypes = '{!supportedTypes}';
+        var flosumsf = jsforce;
+        var selfConn;
+        var filterValue;
+        var retrieveStandardComponent = false;
+        var apiVersion = {!localApiVersion};
+        var normalZip = new JSZip();
+        var logId;
+        var syncId;
+        
+        var permissionMap = {};
+        permissionMap['CustomObject'] = ['*'];
+        permissionMap['ApexClass'] = ['*'];
+        permissionMap['ApexPage'] = ['*'];
+        permissionMap['Layout'] = ['*'];
+        permissionMap['CustomTab'] = ['*'];
+        permissionMap['CustomApplication'] = ['*'];
+        permissionMap['ExternalDataSource'] = ['*'];
+        permissionMap['CustomPermission'] = ['*'];
+        
+        var manageableStateToRetrieve = {};
+        manageableStateToRetrieve['released'] = 'released';
+        manageableStateToRetrieve['unmanaged'] = 'unmanaged';
+        manageableStateToRetrieve['beta'] = 'beta';
+        manageableStateToRetrieve[undefined] = 'undefined';
+        
+        var typeToFolderMap = {};
+        typeToFolderMap['Document'] = 'DocumentFolder';
+        typeToFolderMap['Dashboard'] = 'DashboardFolder';
+        typeToFolderMap['Report'] = 'ReportFolder';
+        typeToFolderMap['EmailTemplate'] = 'EmailFolder';
+        
+        var folderToTypeMap = {};
+        folderToTypeMap['DocumentFolder'] = 'Document';
+        folderToTypeMap['DashboardFolder'] = 'Dashboard';
+        folderToTypeMap['ReportFolder'] = 'Report';
+        folderToTypeMap['EmailFolder'] = 'EmailTemplate';
+        
+        var bundleTypes = {};
+        bundleTypes['AuraDefinitionBundle'] = 'AuraDefinitionBundle';
+        
+        var mmap = {};
+        mmap['CustomLabel'] = true;
+        mmap['CustomField'] = true;
+        mmap['CompactLayout'] = true;
+        mmap['WebLink'] = true;
+        mmap['RecordType'] = true;
+        mmap['ListView'] = true;
+        mmap['FieldSet'] = true;
+        mmap['AssignmentRule'] = true;
+        mmap['AutoResponseRule'] = true;
+        mmap['ValidationRule'] = true;
+        mmap['WorkflowTask'] = true;
+        mmap['WorkflowOutboundMessage'] = true;
+        mmap['WorkflowFieldUpdate'] = true;
+        mmap['WorkflowAlert'] = true;
+        mmap['WorkflowRule'] = true;
+        mmap['SharingOwnerRule'] = true;
+        mmap['SharingCriteriaRule'] = true;
+        mmap['BusinessProcess'] = true;
+        mmap['SharingReason'] = true;
+        mmap['EscalationRule'] = true;
+        mmap['MatchingRule'] = true;
+        
+        var filteredMetaItems = {};
+        
+        var requestMetaTypeLi = [];
+        var requestIndex = 0;
+        var firstLimit = 3000;
+        
+        var currentRequestLi = [];
+        var currentRequestIndex = 0;
+        var AsyncIdMap = {};
+        var AsyncIdsLi = [];
+        var AsyncIdsIndex = 0;
+        var RemainingAsyncIdLi = [];
+        
+        var remainingTypesMap = {};
+        var fileMap = {};
+        var processedFolderMap = {};
+        
+        var differentRetrievalMap = {};
+        differentRetrievalMap['Document'] = 'Document';
+        differentRetrievalMap['Dashboard'] = 'Dashboard';
+        differentRetrievalMap['Report'] = 'Report';
+        differentRetrievalMap['EmailTemplate'] = 'EmailTemplate';
+        differentRetrievalMap['Flow'] = 'Flow';
+        differentRetrievalMap['CustomField'] = 'CustomField';
+        differentRetrievalMap['SharingOwnerRule'] = 'SharingOwnerRule';
+        differentRetrievalMap['SharingCriteriaRule'] = 'SharingCriteriaRule';
+        
+        var customObjectTranslationsInfoSet = ['CustomField','QuickAction','RecordType','SharingReason','ValidationRule','WebLink','WorkflowTask','Layout'];
+        var translationsInfoSet = ['CustomApplication','CustomLabels','CustomPageWebLink','CustomTab','QuickAction','ReportType','Scontrol'];
+        
+        var visibleStateConditionStr = '';
+        var visibleStateMainFilterList = [];
+        var visibleStateEnableFilterLogic = [];
+        
+        var myApp = angular.module("localworkspace", []);
+        myApp.controller("RetrieveChangesController", ['$scope', function($scope) {
+            $scope.people = ['ApexClass','ApexPage'];
+            $scope.enableFilterLogic = false;
+            $scope.selectedCategory = 'all';
+            $scope.changesCount = 0;
+            $scope.disableUi = false;
+            $scope.disableCommitButton = false;
+            $scope.selectedMetadataType = '';
+            $scope.metaTypeLi   =[];
+            $scope.metadataTypeOptions = [];
+            $scope.CommitStep = 1;
+            
+            $scope.commitChunkLi = [];
+            $scope.commitChunkIndex = 0;
+            
+            //Pagination variables.
+            $scope.componentList = [];
+            $scope.orderByColumn = 'lastModifiedDate';
+            $scope.isReverse = true;
+            $scope.metaOffSet = 0;
+            $scope.totalRecords = 0;
+            $scope.staticLimit = 50;
+            $scope.viewLimit = $scope.staticLimit;
+            var tempObj = {};
+            //tempObj['id'] = 'Id';
+            tempObj['type'] = 'Component Type';
+            tempObj['fullName'] = 'Component Name';
+            tempObj['lastModifiedByName'] = 'Changed By';
+            tempObj['lastModifiedDate'] = 'Changed On';
+            tempObj['createdByName'] = 'Created By';
+            tempObj['createdOn'] = 'Created On';
+            //tempObj['changedOn'] = 'Changed On';
+            $scope.fieldSet = tempObj;
+            
+            //For Retrieval
+            $scope.selectedList = [];
+            
+            $scope.disableRetrieveChangesButton = false;
+            $scope.disablePushButton = true;
+            $scope.isAllChecked = false ;
+            
+            //Commit Status pagination variables
+            $scope.safeToCommitLi = [];
+            $scope.notToCommitLi  = [];
+            $scope.safeOrderByColumn = 'fullName';
+            $scope.safeIsReverse = false;
+            $scope.safeMetaOffSet = 0;
+            $scope.safeTotalRecords = 0;
+            $scope.safeViewLimit = $scope.staticLimit;
+            
+            $scope.notOrderByColumn = 'fullName';
+            $scope.notIsReverse = false;
+            $scope.notMetaOffSet = 0;
+            $scope.notTotalRecords = 0;
+            $scope.notViewLimit = $scope.staticLimit;
+            
+            var tempObj2 = {};
+            //tempObj['id'] = 'Id';
+            tempObj2['metaType'] = 'Component Type';
+            tempObj2['fullName'] = 'Component Name';
+            tempObj2['changedBy'] = 'Changed By';
+            tempObj2['changedOn'] = 'Changed On';
+            $scope.commitFieldSet = tempObj2;
+            
+            var tempObj3 = {};
+            //tempObj['id'] = 'Id';
+            tempObj3['metaType'] = 'Component Type';
+            tempObj3['fullName'] = 'Component Name';
+            tempObj3['changedBy'] = 'Changed By';
+            tempObj3['changedOn'] = 'Changed On';
+            tempObj3['reason'] = 'Reason';
+            $scope.notToCommitFieldSet = tempObj3;
+            
+            $scope.filterList = [];
+            $scope.compareList = [];
+            $scope.compareList.push('equals');
+            $scope.compareList.push('not equals');
+            $scope.compareList.push('contains');
+            $scope.compareList.push('starts with');
+            $scope.compareList.push('does not contain');
+            $scope.fieldList = {};
+            $scope.fieldList['type'] = 'Component Type';
+            $scope.fieldList['fullName'] = 'Component Name';
+            $scope.fieldList['lastModifiedByName'] = 'Changed By';
+            $scope.fieldList['createdByName'] = 'Created By';
+            /*$scope.fieldList.push('type');
+            $scope.fieldList.push('fullName');
+            $scope.fieldList.push('lastModifiedByName');*/
+            //$scope.fieldList.push('lastModifiedDate');
+            $scope.mainFilterList = [];
+            
+            
+            selfConn = createSelfConnection();
+            selfConn.metadata.describe(apiVersion).then(function(result, err){
+                if(err)
+                {
+                    console.log(err);
+                }
+                else if(result != undefined && result.metadataObjects != undefined && Array.isArray(result.metadataObjects))
+                {
+                    $scope.$apply(function() {
+                        if(supportedTypes != undefined && supportedTypes != '')
+                        {
+                            var supportedMap = {};
+                            var spLi = JSON.parse(supportedTypes);
+                            for(var index in spLi)
+                                if(index < spLi.length)
+                                    supportedMap[spLi[index]] = spLi[index];
+                            for(var index=0; index < result.metadataObjects.length; index++)
+                            {
+                                var metaType = result.metadataObjects[index];
+                                if(metaType != undefined && metaType.xmlName != undefined )
+                                {
+                                    if(supportedMap[metaType.xmlName] != undefined)
+                                        $scope.metaTypeLi.push(metaType.xmlName);
+                                    if(metaType.childXmlNames != undefined && Array.isArray(metaType.childXmlNames))
+                                    {
+                                        for(var index2=0; index2 < metaType.childXmlNames.length; index2++)
+                                        {
+                                            var childType = metaType.childXmlNames[index2];
+                                            if(childType != undefined && supportedMap[childType] != undefined)
+                                            {
+                                                $scope.metaTypeLi.push(childType);
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        $scope.metaTypeLi.sort();
+                        if($scope.metaTypeLi.length == 0)
+                        {
+                            $scope.disableRetrieveChangesButton = true;
+                        }
+                    });
+                }
+            });
+            
+            $scope.callAutoComplete = function(localValue,localOperator){
+                if(localValue == 'type')
+                {
+                    /*$( ".tagsclass" ).autocomplete({
+                        source: $scope.metaTypeLi,
+                        select: function( event, ui) {
+                            $scope.$apply(function() {
+                                    console.log('Hi Now control goes here');
+                                    console.log(ui);
+                                    var filterindex = event.target.getAttribute('filterindex');
+                                    console.log(filterindex);
+                                    if(filterindex != undefined && filterindex < $scope.filterList.length)
+                                    {
+                                        console.log('ui.item.value--'+ui.item.value);
+                                        $scope.filterList[filterindex].value = ui.item.value;
+                                    }
+                            });
+                        }
+                    });*/
+                    function split( val ) {
+                        return val.split( /,\s*/ );
+                    }
+                    function extractLast( term ) {
+                        return split( term ).pop();
+                    }
+                    $( ".tagsclass" ).bind( "keydown", function( event ) {
+                        if ( event.keyCode === $.ui.keyCode.TAB &&
+                            $( this ).autocomplete( "instance" ).menu.active ) {
+                            event.preventDefault();
+                        }
+                    })
+                    .autocomplete({
+                        minLength: 1,
+                        source: function( request, response ) {
+                            var resultLi = [];
+                            var lastTerm = extractLast( request.term );
+                            lastTerm = lastTerm.toLowerCase();
+                            for(var index=0; index<$scope.metaTypeLi.length && resultLi.length < 10; index++)
+                            {
+                                var currentItem = $scope.metaTypeLi[index];
+                                if(currentItem.toLowerCase().indexOf(lastTerm) == 0)
+                                    resultLi.push(currentItem);
+                            }
+                            response(resultLi);
+                        },
+                        focus: function() {
+                            // prevent value inserted on focus
+                            return false;
+                        },
+                        select: function( event, ui ) {
+                            var terms = split( this.value );
+                            // remove the current input
+                            terms.pop();
+                            // add the selected item
+                            terms.push( ui.item.value );
+                            // add placeholder to get the comma-and-space at the end
+                            terms.push( "" );
+                            this.value = terms.join( "," );
+                            var localValue = this.value;
+                            $scope.$apply(function() {
+                                    var filterindex = event.target.getAttribute('filterindex');
+                                    if(filterindex != undefined && filterindex < $scope.filterList.length)
+                                    {
+                                        console.log(localValue);
+                                        $scope.filterList[filterindex].value = localValue;
+                                    }
+                            });
+                            return false;
+                        }
+                    });
+                }
+            };
+            
+            $scope.addRowToSearch = function(){
+                if($scope.filterList.length < 9)
+                {
+                    var filterRow = {};
+                    filterRow.field = '';
+                    filterRow.operator = '';
+                    filterRow.value = '';
+                    $scope.filterList.push(filterRow);
+                }
+            }
+
+            $scope.applySearch = function(){
+                $scope.mainFilterList = [];
+                for(var index=0; index < $scope.filterList.length; index++)
+                {
+                    var filterRow = $scope.filterList[index];
+                    $scope.mainFilterList.push(JSON.parse(JSON.stringify(filterRow)));
+                }
+            }
+            $scope.addRowToSearch();
+            $scope.addRowToSearch();
+            $scope.addRowToSearch();
+            $scope.addRowToSearch();
+            $scope.addRowToSearch();
+            $scope.applySearch();
+            
+            $scope.filterForSearch = function(meta){
+                //console.log(meta.fullName);
+                if($scope.selectedMetadataType != '' && meta.type != $scope.selectedMetadataType)
+                {
+                    return false;
+                }
+                /*if($scope.mainFilterList.length > 0)
+                {
+                    var isRowVisible = true;
+                    //console.log($scope.mainFilterList.length);
+                    for(var index=0; index < $scope.mainFilterList.length; index++)
+                    {
+                        var filterRow = $scope.mainFilterList[index];
+                        if(filterRow != undefined)
+                        {
+                            var fieldValue = meta[filterRow.field];
+                            var filterVal = filterRow.value;
+                            var filterOperator = filterRow.operator;
+                            if(filterVal != undefined && filterVal != null && filterVal != '' && filterOperator != undefined)
+                            {
+                                fieldValue = fieldValue.toLowerCase();
+                                filterVal = filterVal.toLowerCase();
+                                //console.log('fieldValue------'+fieldValue);
+                                //console.log('filterVal-------'+filterVal);
+                                //console.log('filterOperator--'+filterOperator);
+                                if(filterOperator == 'equals')
+                                {
+                                    if(fieldValue == filterVal)
+                                    {
+                                        isRowVisible = true;
+                                    }
+                                    else
+                                        isRowVisible = false;
+                                }
+                                else if(filterOperator == 'not equals')
+                                {
+                                    if(fieldValue != filterVal)
+                                    {
+                                        isRowVisible = true;
+                                    }
+                                    else
+                                        isRowVisible = false;
+                                }
+                                else if(filterOperator == 'contains' && fieldValue != undefined && fieldValue != null)
+                                {
+                                    if(fieldValue.indexOf(filterVal) > -1)
+                                    {
+                                        isRowVisible = true;
+                                    }
+                                    else
+                                        isRowVisible = false;
+                                }
+                                else if(filterOperator == 'starts with' && fieldValue != undefined && fieldValue != null)
+                                {
+                                    if((fieldValue.indexOf(filterVal) == 0))
+                                    {
+                                        isRowVisible = true;
+                                    }
+                                    else
+                                        isRowVisible = false;
+                                }
+                                else if(filterOperator == 'does not contain' && fieldValue != undefined && fieldValue != null)
+                                {
+                                    if(fieldValue.indexOf(filterVal) < 0)
+                                    {
+                                        isRowVisible = true;
+                                    }
+                                    else
+                                        isRowVisible = false;
+                                }
+                            }
+                        }
+                        if(!isRowVisible)
+                        {
+                            return isRowVisible;
+                        }
+                    }
+                }*/
+                return true;
+            }
+            
+            $scope.createListOnFinishOfQuery = function(){
+                console.log('Query Completed.');
+                console.log(filteredMetaItems);
+                $scope.$apply(function() {
+                    if(isMapEmpty(filteredMetaItems))
+                    {
+                        $scope.disableRetrieveChangesButton = false;
+                        $scope.disableUi = false;
+                        setDefaultMessageOnPage('No change found.');
+                    }
+                    else
+                    {
+                        var filterTypeList = [];
+                        var tempTypLi = [];
+                        for(key in filteredMetaItems)
+                        {
+                            var tempTypelist = filteredMetaItems[key];
+                            for(var index=0; index < tempTypelist.length; index++)
+                            {
+                                    var meta = tempTypelist[index];
+                                    meta.checked = false;
+                                    meta.changedOn = formatAMPM(new Date(meta.lastModifiedDate));
+                                    meta.createdOn = formatAMPM(new Date(meta.lastModifiedDate));
+                                    filterTypeList.push(meta);
+                            }
+                            if(tempTypelist.length > 0)
+                                tempTypLi.push(key);
+                        }
+                        if(tempTypLi.length > 0)
+                        {
+                            tempTypLi.sort();
+                            for(var index= 0; index < tempTypLi.length; index++)
+                                $scope.metadataTypeOptions.push(tempTypLi[index]);
+                        }
+                        $scope.componentList = filterTypeList;
+                        $scope.totalRecords = filterTypeList.length;
+                        //
+                        $scope.finishRetrieveChanges();
+                        console.log('createListOnFinishOfQuery');
+                    }
+                    //$scope.defaultNextPrevious();
+                });
+            }
+            
+            $scope.refreshOrderBy = function(orderVal) {
+                $scope.metaOffSet = 0;
+                $scope.viewLimit = $scope.metaOffSet + $scope.staticLimit;
+                if(orderVal == $scope.orderByColumn)
+                    $scope.isReverse = !$scope.isReverse;
+                else
+                {
+                    $scope.isReverse = false;
+                    $scope.orderByColumn = orderVal;
+                }
+                $scope.defaultNextPrevious();
+            };
+            
+            $scope.showFirst = function() {
+                $scope.metaOffSet = 0;
+                $scope.viewLimit = $scope.staticLimit;
+                $scope.defaultNextPrevious();      
+            };
+            
+            $scope.listPrevious = function() {
+                $scope.metaOffSet = $scope.metaOffSet - $scope.staticLimit;
+                if($scope.metaOffSet < 0)
+                    $scope.metaOffSet = 0;
+                $scope.viewLimit = $scope.metaOffSet + $scope.staticLimit;
+                $scope.defaultNextPrevious();
+            };
+            
+            $scope.listNext = function(tempTotal) {
+                if(($scope.metaOffSet + $scope.staticLimit) < tempTotal)
+                {
+                    $scope.metaOffSet = $scope.metaOffSet + $scope.staticLimit;
+                    $scope.viewLimit = $scope.metaOffSet + $scope.staticLimit;
+                }
+                $scope.defaultNextPrevious();
+            };
+            
+            $scope.showLast = function(tempTotal) {
+                $scope.metaOffSet = tempTotal - (tempTotal % $scope.staticLimit);
+                if($scope.metaOffSet == tempTotal && $scope.metaOffSet != 0)
+                {
+                    $scope.metaOffSet = tempTotal - $scope.staticLimit;
+                }
+                $scope.viewLimit = $scope.metaOffSet + $scope.staticLimit;
+                $scope.defaultNextPrevious();
+            };
+            
+            $scope.defaultRetrieveChanges = function() {
+                $scope.$apply(function() {
+                    //defaultClear
+                    $scope.disableUi = true;
+                    $scope.componentList = [];
+                    $scope.metadataTypeOptions = [];
+                    $scope.selectedMetadataType = '';
+                    $scope.selectedList = [];
+                    $scope.orderByColumn = 'lastModifiedDate';
+                    $scope.isReverse = true;
+                    $scope.metaOffSet = 0;
+                    $scope.totalRecords = 0;
+                    $scope.viewLimit = $scope.staticLimit;
+                    $scope.disableRetrieveChangesButton = true;
+                    $scope.disablePushButton = true;
+                    $scope.isAllChecked = false ;
+                    console.log('defaultRetrieveChanges');
+                    $scope.applySearch();
+                    listComponents();
+                });
+                
+            };
+            
+            $scope.finishRetrieveChanges = function() {
+                $scope.disableRetrieveChangesButton = true;
+                $scope.disablePushButton = false;
+                $scope.disableUi = false;
+                setDefaultMessageOnPage('');
+            };
+            
+            $scope.checkItemAll = function(isAllChecked,compLi,offset) {
+                 for(var index = offset ; index < (offset+$scope.staticLimit) && index < compLi.length  ; index++) {
+                    if(isAllChecked)
+                        compLi[index].checked = true;
+                    else
+                        compLi[index].checked = false;  
+                 }
+            };
+            
+            $scope.checkUnCheck = function(compLi,offset) {
+                var flag = true;
+                var index;
+                for(var index = offset ; index < (offset+$scope.staticLimit) && index < compLi.length  ; index++) {
+                    if( ! compLi[index].checked ) {
+                        flag = false;
+                        break;
+                    }
+                }
+                $scope.isAllChecked = flag ;
+                return flag;
+            };
+            
+            $scope.defaultNextPrevious = function(){
+                $scope.isAllChecked = false ;
+            }
+            
+            $scope.isPrevious = function() {
+                if($scope.metaOffSet < 1) 
+                    return true;
+                else {
+                    return false;
+                }
+            };
+            
+            $scope.isNext = function(tempTotal){
+                if(tempTotal > $scope.metaOffSet+$scope.staticLimit){
+                    return false;
+                }
+                else {
+                    return true;
+                }
+            };
+            
+            $scope.totalPageCount = function(tempTotal){
+                var totalPage = parseInt(tempTotal % $scope.staticLimit > 0 ? (tempTotal / $scope.staticLimit)+1 : (tempTotal / $scope.staticLimit));
+                return totalPage;
+                
+            };
+            
+            $scope.currentPageNo = function(tempTotal){
+                var currentPage = 1;
+                if($scope.metaOffSet <  $scope.staticLimit)
+                    currentPage =  1;
+                else
+                {
+                    currentPage = Math.ceil($scope.metaOffSet / $scope.staticLimit)+1;
+                }
+                return currentPage;
+            };
+            
+            $scope.startRetrievalForAllSelectedForPush = function(){
+                console.log('startRetrievalForAllSelectedForPush');
+                setDefaultMessageOnPage('Please wait...');
+                $scope.disablePushButton = true;
+                $scope.disableUi = true;
+                $scope.selectedList = [];
+                filteredMetaItems = {};
+                requestMetaTypeLi = [];
+                requestIndex = 0;
+                angular.forEach($scope.componentList, function(comp) {
+                    if(comp.checked)
+                    {
+                        var tempLi = [];
+                        if(filteredMetaItems[comp.type] != undefined)
+                        {
+                            tempLi = filteredMetaItems[comp.type];
+                        }
+                        tempLi.push(comp);
+                        filteredMetaItems[comp.type] = tempLi;
+                    }
+                });
+                var tempOrderLi = [];
+                for(var key in filteredMetaItems)
+                {
+                    if(folderToTypeMap[key] == undefined)
+                    {
+                        requestMetaTypeLi.push(key);
+                    }
+                }
+                if(requestMetaTypeLi.length > 0)
+                {
+                    createLog();
+                }
+                else
+                {
+                    $scope.disablePushButton = false;
+                    $scope.showErrorMessage('Please select a component.');
+                }
+            };
+          
+            
+            $scope.finishRetrieval = function(){
+                //disablePushButton = false;
+                $scope.componentList = [];
+                $scope.safeToCommitLi = [];
+                $scope.notToCommitLi  = [];
+                if(logId != undefined && logId != null && logId.length == 18)
+                {
+                    Visualforce.remoting.Manager.invokeAction(
+                        '{!$RemoteAction.FL_LocalWorkspaceController.getCommitDetail}',
+                        logId,
+                        function(r, e){
+                            if(e.status) 
+                            {
+                                console.log(r);
+                                if(r.length > 0 )
+                                {
+                                    $scope.$apply(function() {
+                                        for(var index=0; index< r.length; index++)
+                                        {
+                                            var comp = r[index];
+                                            if(comp.isSafe)
+                                                $scope.safeToCommitLi.push(comp);
+                                            else
+                                            {
+                                                $scope.notToCommitLi.push(comp);
+                                            }
+                                        }
+                                        $scope.CommitStep = 2;
+                                        $scope.disableUi = false;
+                                        if($scope.safeToCommitLi.length == 0)
+                                            $scope.disableCommitButton = true;
+                                        setDefaultMessageOnPage('');
+                                    });
+                                }
+                                else
+                                {
+                                    $scope.disablePushButton = false;
+                                    $scope.showErrorMessage('No components found.');
+                                }
+                            }
+                            else
+                            {
+                                $scope.disablePushButton = false;
+                                $scope.showErrorMessage(e.message);
+                            }
+                    });
+                }
+            };
+            
+            $scope.startFinalCommit = function(){
+                $scope.disableUi = true;
+                $scope.commitChunkLi = [];
+                $scope.commitChunkIndex = 0;
+                var bodyCount = 0;
+                var chunkLi = [];
+                angular.forEach($scope.safeToCommitLi, function(comp) {
+                    if(comp.compId != undefined && comp.compId != null && comp.compId.length == 18)
+                    {
+                        if(((bodyCount + comp.contentLength) > 2000000 || chunkLi.length % 1000 == 0) && chunkLi.length > 0 )
+                        {
+                            $scope.commitChunkLi.push(chunkLi);
+                            bodyCount = 0;
+                            chunkLi = [];
+                        }
+                        chunkLi.push(comp.compId);
+                        bodyCount = bodyCount + comp.contentLength;
+                    }
+                });
+                if(chunkLi.length > 0)
+                {
+                    $scope.commitChunkLi.push(chunkLi);
+                }
+                $scope.commitInChunk();
+            }
+            
+            $scope.commitInChunk = function(){
+                if($scope.commitChunkIndex < $scope.commitChunkLi.length)
+                {
+                    var chunkIds = $scope.commitChunkLi[$scope.commitChunkIndex];
+                    console.log(chunkIds);
+                    console.log(chunkIds.length);
+                    Visualforce.remoting.Manager.invokeAction(
+                        '{!$RemoteAction.FL_LocalWorkspaceController.commitComponents}',
+                        chunkIds,
+                        syncId,
+                        function(r, e){
+                            if(e.status && r) 
+                            {
+                                console.log(r);
+                                if(r == 'true')
+                                {
+                                    $scope.commitChunkIndex++;
+                                    $scope.commitInChunk();
+                                }
+                                else
+                                {
+                                    $scope.showErrorMessage(r);
+                                }
+                            }
+                            else
+                            {
+                                $scope.showErrorMessage(e.message);
+                            }
+                    });
+                }
+                else
+                {
+                    finishCommit();
+                }
+            }
+            
+            $scope.createSyncRecord = function() {
+                $scope.disableCommitButton = true;
+                setDefaultMessageOnPage('Please wait...');
+                createSyncLog();
+            }
+            
+            //Safe to commit
+            $scope.safeRefreshOrderBy = function(orderVal) {
+                $scope.safeMetaOffSet = 0;
+                $scope.safeViewLimit = $scope.safeMetaOffSet + $scope.staticLimit;
+                if(orderVal == $scope.safeOrderByColumn)
+                    $scope.safeIsReverse = !$scope.safeIsReverse;
+                else
+                {
+                    $scope.safeIsReverse = false;
+                    $scope.safeOrderByColumn = orderVal;
+                }
+            };
+            $scope.safeShowFirst = function() {
+                $scope.safeMetaOffSet = 0;
+                $scope.safeViewLimit = $scope.staticLimit;    
+            };
+            $scope.safeListPrevious = function() {
+                $scope.safeMetaOffSet = $scope.safeMetaOffSet - $scope.staticLimit;
+                if($scope.safeMetaOffSet < 0)
+                    $scope.safeMetaOffSet = 0;
+                $scope.safeViewLimit = $scope.safeMetaOffSet + $scope.staticLimit;
+            };
+            $scope.safeListNext = function(tempTotal) {
+                if(($scope.safeMetaOffSet + $scope.staticLimit) < tempTotal)
+                {
+                    $scope.safeMetaOffSet = $scope.safeMetaOffSet + $scope.staticLimit;
+                    $scope.safeViewLimit = $scope.safeMetaOffSet + $scope.staticLimit;
+                }
+            };
+            $scope.safeShowLast = function(tempTotal) {
+                $scope.safeMetaOffSet = tempTotal - (tempTotal % $scope.staticLimit);
+                if($scope.safeMetaOffSet == tempTotal && $scope.safeMetaOffSet != 0)
+                {
+                    $scope.safeMetaOffSet = tempTotal - $scope.staticLimit;
+                }
+                $scope.safeViewLimit = $scope.safeMetaOffSet + $scope.staticLimit;
+            };
+            $scope.safeIsPrevious = function() {
+                if($scope.safeMetaOffSet < 1) 
+                    return true;
+                else {
+                    return false;
+                }
+            };
+            $scope.safeIsNext = function(tempTotal){
+                if(tempTotal > $scope.safeMetaOffSet+$scope.staticLimit){
+                    return false;
+                }
+                else {
+                    return true;
+                }
+            };
+            $scope.safeTotalPageCount = function(tempTotal){
+                var totalPage = parseInt(tempTotal % $scope.staticLimit > 0 ? (tempTotal / $scope.staticLimit)+1 : (tempTotal / $scope.staticLimit));
+                return totalPage;
+                
+            };
+            $scope.safeCurrentPageNo = function(tempTotal){
+                var currentPage = 1;
+                if($scope.safeMetaOffSet <  $scope.staticLimit)
+                    currentPage =  1;
+                else
+                {
+                    currentPage = Math.ceil($scope.safeMetaOffSet / $scope.staticLimit)+1;
+                }
+                return currentPage;
+            };
+            
+            
+            
+            //Not to commit
+            $scope.notRefreshOrderBy = function(orderVal) {
+                $scope.notMetaOffSet = 0;
+                $scope.notViewLimit = $scope.notMetaOffSet + $scope.staticLimit;
+                if(orderVal == $scope.notOrderByColumn)
+                    $scope.notIsReverse = !$scope.notIsReverse;
+                else
+                {
+                    $scope.notIsReverse = false;
+                    $scope.notOrderByColumn = orderVal;
+                }
+            };
+            $scope.notShowFirst = function() {
+                $scope.notMetaOffSet = 0;
+                $scope.notViewLimit = $scope.staticLimit;
+            };
+            $scope.notListPrevious = function() {
+                $scope.notMetaOffSet = $scope.notMetaOffSet - $scope.staticLimit;
+                if($scope.notMetaOffSet < 0)
+                    $scope.notMetaOffSet = 0;
+                $scope.notViewLimit = $scope.notMetaOffSet + $scope.staticLimit;
+            };
+            $scope.notListNext = function(tempTotal) {
+                if(($scope.notMetaOffSet + $scope.staticLimit) < tempTotal)
+                {
+                    $scope.notMetaOffSet = $scope.notMetaOffSet + $scope.staticLimit;
+                    $scope.notViewLimit = $scope.notMetaOffSet + $scope.staticLimit;
+                }
+            };
+            $scope.notShowLast = function(tempTotal) {
+                $scope.notMetaOffSet = tempTotal - (tempTotal % $scope.staticLimit);
+                if($scope.notMetaOffSet == tempTotal && $scope.notMetaOffSet != 0)
+                {
+                    $scope.notMetaOffSet = tempTotal - $scope.staticLimit;
+                }
+                $scope.notViewLimit = $scope.notMetaOffSet + $scope.staticLimit;
+            };
+            $scope.notIsPrevious = function() {
+                if($scope.notMetaOffSet < 1) 
+                    return true;
+                else {
+                    return false;
+                }
+            };
+            $scope.notIsNext = function(tempTotal){
+                if(tempTotal > $scope.notMetaOffSet+$scope.staticLimit){
+                    return false;
+                }
+                else {
+                    return true;
+                }
+            };
+            $scope.notTotalPageCount = function(tempTotal){
+                var totalPage = parseInt(tempTotal % $scope.staticLimit > 0 ? (tempTotal / $scope.staticLimit)+1 : (tempTotal / $scope.staticLimit));
+                return totalPage;
+                
+            };
+            $scope.notCurrentPageNo = function(tempTotal){
+                var currentPage = 1;
+                if($scope.notMetaOffSet <  $scope.staticLimit)
+                    currentPage =  1;
+                else
+                {
+                    currentPage = Math.ceil($scope.notMetaOffSet / $scope.staticLimit)+1;
+                }
+                return currentPage;
+            };
+            
+            $scope.showErrorMessage = function(str){
+                $scope.disableUi = false;
+                if($('#msg') != undefined)
+                {
+                    $('#msg').remove();
+                }
+                var parentVal = $("[id$='msg']");
+                if(parentVal != undefined)
+                {
+                    var childVal = '<span id="msg">'+
+                                    '<span>'+
+                                        '<div class="message errorM3" role="alert">'+
+                                            '<table border="0" cellpadding="0" cellspacing="0" class="messageTable" style="padding:0px;margin:0px;">'+
+                                                '<tbody>'+
+                                                    '<tr valign="top">'+
+                                                    '<td>'+
+                                                        '<img alt="ERROR" class="msgIcon" src="/s.gif" title="ERROR">'+
+                                                    '</td>'+
+                                                    '<td class="messageCell">'+
+                                                        '<div class="messageText">'+
+                                                            '<span style="color:#cc0000">'+
+                                                                '<h4>Error:</h4>'+
+                                                            '</span>'+
+                                                            str+'<br>'+
+                                                        '</div>'+
+                                                    '</td>'+
+                                                    '</tr>'+
+                                                    '<tr>'+
+                                                        '<td></td>'+
+                                                        '<td></td>'+
+                                                    '</tr>'+
+                                                '</tbody>'+
+                                            '</table>'+
+                                        '</div>'+
+                                    '</span>'+
+                                '</span>';
+                    parentVal.before(childVal);
+                }
+            }
+        }]);
+        
+        function listMetadataItems(filterMiliSeconds,IsRetrieveStandard,isProcessSuccessful)
+        {
+            console.log('filterMiliSeconds----'+filterMiliSeconds);
+            console.log('IsRetrieveStandard---'+IsRetrieveStandard);
+            console.log('isProcessSuccessful--'+isProcessSuccessful);
+            if(isProcessSuccessful)
+            {
+                intializeFilterLogic();
+            
+                filterValue = parseInt(filterMiliSeconds);
+                retrieveStandardComponent = IsRetrieveStandard;
+                angular.element(document.getElementById('angularControllerId')).scope().defaultRetrieveChanges();
+            }
+            hide();
+        }
+        
+        function intializeFilterLogic()
+        {
+            angular.element(document.getElementById('angularControllerId')).scope().applySearch();
+            visibleStateConditionStr = '';
+            visibleStateMainFilterList = [];
+            visibleStateEnableFilterLogic = [];
+            visibleStateMainFilterList = angular.element(document.getElementById('angularControllerId')).scope().mainFilterList;
+            visibleStateEnableFilterLogic = angular.element(document.getElementById('angularControllerId')).scope().enableFilterLogic;
+            console.log('visibleStateEnableFilterLogic--'+visibleStateEnableFilterLogic);
+            console.log(visibleStateMainFilterList);
+            if(visibleStateEnableFilterLogic)
+            {
+                visibleStateConditionStr = angular.element(document.getElementById('angularControllerId')).scope().filterCondition;
+            }
+            else
+            {
+                for(var index=0; index < visibleStateMainFilterList.length; index++)
+                {
+                    var filterRow = visibleStateMainFilterList[index];
+                    if(filterRow != undefined && filterRow.value != undefined && filterRow.value != '' && filterRow.operator != undefined && filterRow.operator != '')
+                    {
+                        if(visibleStateConditionStr == '')
+                            visibleStateConditionStr += (index+1)+' ';
+                        else
+                            visibleStateConditionStr += 'AND '+(index+1)+' ';
+                    }
+                }
+            }
+            console.log(visibleStateConditionStr);
+        }
+        
+        function handleSync(tempLogId,exceptionMessage)
+        {
+            if(tempLogId != undefined && tempLogId != null && tempLogId.length == 18)
+            {
+                syncId = tempLogId;
+                angular.element(document.getElementById('angularControllerId')).scope().startFinalCommit();
+            }
+            else if(exceptionMessage != undefined && exceptionMessage != '')
+            {
+                angular.element(document.getElementById('angularControllerId')).scope().showErrorMessage(exceptionMessage);
+            }
+        }
+         
+        //Retrieval
+        //Function to create retrieval request
+        function createRequestForRetrieval(tempLogId,exceptionMessage)
+        {
+            if(tempLogId != undefined && tempLogId != null && tempLogId.length == 18)
+            {
+                logId = tempLogId;
+                AsyncIdMap = {};
+                processedFolderMap = {};
+                currentRequestLi = [];
+                currentRequestIndex = 0;
+                function createRequestFollAll(){
+                    if(requestIndex < requestMetaTypeLi.length)
+                    {
+                        var metaType = requestMetaTypeLi[requestIndex];
+                        var items = filteredMetaItems[metaType];
+                        var oneTypeMetaItems = [];
+                        console.log('Creating requests detail for '+metaType+'(NO:- '+items.length+')');
+                        for(var index=0; index< items.length; index++)
+                        {
+                            if(index != 0 && index % firstLimit == 0)
+                            {
+                                var requestDetail = {};
+                                requestDetail.MetaType = metaType;
+                                requestDetail.Items = oneTypeMetaItems;
+                                requestDetail.ItemNames = [];
+                                requestDetail.IsFirst = true;
+                                var folderNameMap = {};
+                                for(var tempIndex in oneTypeMetaItems)
+                                {
+                                    if(tempIndex < oneTypeMetaItems.length)
+                                    {
+                                        var temoFileName = oneTypeMetaItems[tempIndex].fullName;
+                                        requestDetail.ItemNames.push(temoFileName);
+                                        if(typeToFolderMap[metaType] != undefined && temoFileName.indexOf('/') > -1)
+                                        {
+                                            var folderName = temoFileName.slice(0,temoFileName.indexOf('/'));
+                                            folderNameMap[folderName] = folderName;
+                                        }
+                                    }
+                                }
+                                for(var folderName in folderNameMap)
+                                {
+                                    requestDetail.ItemNames.push(folderName);
+                                }
+                                currentRequestLi.push(requestDetail);
+                                
+                                oneTypeMetaItems = [];
+                            }
+                            oneTypeMetaItems.push(items[index]);
+                        }
+                        if(oneTypeMetaItems.length > 0)
+                        {
+                            var requestDetail = {};
+                            requestDetail.MetaType = metaType;
+                            requestDetail.Items = oneTypeMetaItems;
+                            requestDetail.ItemNames = [];
+                            requestDetail.IsFirst = true;
+                            var folderNameMap = {};
+                            for(var tempIndex in oneTypeMetaItems)
+                            {
+                                if(tempIndex < oneTypeMetaItems.length)
+                                {
+                                    var temoFileName = oneTypeMetaItems[tempIndex].fullName;
+                                    requestDetail.ItemNames.push(temoFileName);
+                                    if(typeToFolderMap[metaType] != undefined && temoFileName.indexOf('/') > -1)
+                                    {
+                                        var folderName = temoFileName.slice(0,temoFileName.indexOf('/'));
+                                        folderNameMap[folderName] = folderName;
+                                    }
+                                }
+                            }
+                            for(var folderName in folderNameMap)
+                            {
+                                requestDetail.ItemNames.push(folderName);
+                            }
+                            currentRequestLi.push(requestDetail);
+                        }
+                        requestIndex++;
+                        createRequestFollAll();
+                    }
+                    else
+                    {
+                        console.log('Total '+currentRequestLi.length+' request detail created.');
+                        processRequestForRetrieval();
+                        //angular.element(document.getElementById('angularControllerId')).scope().finishRetrieval();
+                    }
+                }
+                createRequestFollAll();
+            }
+            else if(exceptionMessage != undefined && exceptionMessage != '')
+            {
+                angular.element(document.getElementById('angularControllerId')).scope().showErrorMessage(exceptionMessage);
+            }
+        }
+        
+        function processRequestForRetrieval()
+        {
+            if(currentRequestIndex < currentRequestLi.length)
+            {
+                var requestDetail = currentRequestLi[currentRequestIndex];
+                var req = getRetrieveRequest();
+                var metaItemsInRequest = [];
+                var oneType = {};
+                oneType.name = requestDetail.MetaType;
+                oneType.members = requestDetail.ItemNames;
+                req.unpackaged.types.push(oneType);
+                setDefaultMessageOnPage('Retrieving metadata for '+requestDetail.MetaType+'.');
+                console.log('Creating '+requestDetail.MetaType+' request--'+(currentRequestIndex+1)+'/'+currentRequestLi.length);
+                if(requestDetail.MetaType == 'Profile' || requestDetail.MetaType == 'PermissionSet')
+                {
+                    for(var key in permissionMap)
+                    {
+                        var tempType = {};
+                        tempType.name = key;
+                        tempType.members = permissionMap[key];
+                        req.unpackaged.types.push(tempType);
+                    }
+                }
+                if(requestDetail.MetaType == 'CustomObjectTranslation')
+                {
+                    for(var index = 0; index < customObjectTranslationsInfoSet.length; index++)
+                    {
+                        var tempType = {};
+                        tempType.name = customObjectTranslationsInfoSet[index];
+                        tempType.members = ['*'];
+                        req.unpackaged.types.push(tempType);
+                    }
+                }
+                if(requestDetail.MetaType == 'Translations')
+                {
+                    for(var index = 0; index < translationsInfoSet.length; index++)
+                    {
+                        var tempType = {};
+                        tempType.name = translationsInfoSet[index];
+                        tempType.members = ['*'];
+                        req.unpackaged.types.push(tempType);
+                    }
+                }
+                selfConn.metadata.retrieve(req,function(err, result){
+                    if(err)
+                    {
+                        console.log('Error while creating retrieval request.');
+                        console.log(err);
+                        console.log(req);
+                    }
+                    else
+                    {
+                        if(result != undefined && result.id != undefined)
+                        {
+                            AsyncIdMap[result.id] = requestDetail;
+                        }
+                    }
+                    currentRequestIndex++;
+                    processRequestForRetrieval();
+                });
+            }
+            else
+            {
+                AsyncIdsLi = [];
+                AsyncIdsIndex = 0;
+                for(var AsyncId in AsyncIdMap)
+                {
+                    AsyncIdsLi.push(AsyncId);
+                }
+                console.log('Total requests created--'+AsyncIdsLi.length);
+                if(AsyncIdsLi.length > 0)
+                {
+                    currentRequestLi = [];
+                    setTimeout(checkRetrievalStatus, 10000);
+                }
+                else
+                {
+                    console.log('No request created.');
+                }
+            }
+        }
+        
+        function checkRetrievalStatus()
+        {
+            if(AsyncIdsIndex < AsyncIdsLi.length)
+            {
+                var currentAsyncId = AsyncIdsLi[AsyncIdsIndex];
+                var currentAsyncDetail = AsyncIdMap[currentAsyncId];
+                var currentMetaType = currentAsyncDetail.MetaType;
+                setDefaultMessageOnPage('Retrieving '+currentMetaType+'.');
+                console.log('Checking request for retrieval('+(AsyncIdsIndex+1)+'/'+AsyncIdsLi.length+')');
+                selfConn.metadata.checkRetrieveStatus(currentAsyncId,function(err,result){
+                    if(err) 
+                    {
+                        console.log('Error in checkRetrieveStatus.');
+                        console.log(err);
+                        if(currentAsyncDetail.Items.length > 1)
+                        {
+                            breakRetrievalRequest(currentAsyncId);
+                        }
+                        else
+                        {
+                            cotinueCheckRetrievalStatus();
+                        }
+                    }
+                    else
+                    {
+                        if(result != undefined && result.id != undefined && AsyncIdMap[result.id] != undefined)
+                        {
+                            if(result.done == 'true')
+                            {
+                                if(result.success != 'true')
+                                {
+                                    console.log('Error in retrieval(result.success).');
+                                    if(currentAsyncDetail.Items.length > 1)
+                                    {
+                                        breakRetrievalRequest(currentAsyncId);
+                                    }
+                                    else
+                                    {
+                                        cotinueCheckRetrievalStatus();
+                                    }
+                                }
+                                else
+                                {
+                                    var zipStr = result.zipFile;
+                                    console.log('Zip file length-'+(zipStr.length/(1024*1024))+' MB');
+                                    
+                                    if(currentMetaType == 'Profile' || currentMetaType == 'PermissionSet')
+                                    {
+                                        var tempZip = new JSZip(zipStr, {base64:true});
+                                        tempZip.remove('objects');
+                                        tempZip.remove('classes');
+                                        tempZip.remove('pages');
+                                        tempZip.remove('layouts');
+                                        tempZip.remove('tabs');
+                                        tempZip.remove('applications');
+                                        tempZip.remove('dataSources');
+                                        tempZip.remove('customPermissions');
+                                        zipStr = tempZip.generate({type:"base64",compression:"DEFLATE"});
+                                    }
+                                    if(zipStr.length < 3000000)
+                                    {
+                                        fileMap = {};
+                                        createFileMap(currentMetaType,zipStr);
+                                        //var commitJSONLi = [];
+                                        console.log(fileMap);
+                                        var tempCRCWrap = {};
+                                        tempCRCWrap.fullNames = [];
+                                        tempCRCWrap.metaTypes = [];
+                                        tempCRCWrap.dataMap = {};
+                                        var commitDetailWrap = {};
+                                        commitDetailWrap.fullNames = [];
+                                        commitDetailWrap.metaTypes = [];
+                                        commitDetailWrap.dataMap = {};
+                                        var tempFullNamesMap = {};
+                                        var tempmetaTypesMap = {};
+                                        for(var metaIndex=0; metaIndex < currentAsyncDetail.Items.length; metaIndex++)
+                                        {
+                                            var meta = currentAsyncDetail.Items[metaIndex];
+                                            
+                                            var compDetail = new Object();
+                                            compDetail.fullName = meta.fullName;
+                                            compDetail.fileName = meta.fileName;
+                                            compDetail.metaType = currentMetaType;
+                                            compDetail.crcCode = 0;
+                                            compDetail.lastModifiedDate = meta.lastModifiedDate;
+                                            compDetail.lastModifiedByName = meta.lastModifiedByName;
+                                            compDetail.base64Content;
+                                            var key = currentMetaType+'#'+meta.fileName;
+                                            if(mmap[currentMetaType] != undefined)
+                                            {
+                                                key = currentMetaType+'#'+meta.fullName;
+                                            }
+                                            if(bundleTypes[currentMetaType] != undefined)
+                                            {
+                                                var fileZip = new JSZip();
+                                                for(var mapKey in fileMap)
+                                                {
+                                                    if(mapKey != undefined && mapKey.indexOf(key+'/') == 0)
+                                                    {
+                                                        var fName = mapKey.replace(currentMetaType+"#",'');
+                                                        fileZip.file(fName,fileMap[mapKey].data,{binary:true});
+                                                        compDetail.crcCode += fileMap[mapKey].crc32;
+                                                    }
+                                                }
+                                                if(compDetail.crcCode != 0)
+                                                {
+                                                    compDetail.base64Content = fileZip.generate({type:"base64",compression:"DEFLATE"});
+                                                }
+                                            }
+                                            else if(fileMap[key] != undefined)
+                                            {
+                                                var fileZip = new JSZip();
+                                                fileZip.file(meta.fileName,fileMap[key].data,{binary:true});
+                                                compDetail.crcCode = fileMap[key].crc32;
+                                                if(fileMap[key+"-meta.xml"] != undefined)
+                                                {
+                                                    compDetail.crcCode = compDetail.crcCode+' '+fileMap[key+"-meta.xml"].crc32;
+                                                    fileZip.file(meta.fileName+"-meta.xml",fileMap[key+"-meta.xml"].data,{binary:true});
+                                                }
+                                                compDetail.base64Content = fileZip.generate({type:"base64",compression:"DEFLATE"});
+                                            }
+                                            else
+                                            {
+                                                console.log('File not found.'+key);
+                                            }
+                                            if(compDetail.crcCode != 0)
+                                            {
+                                                
+                                                tempFullNamesMap[compDetail.fullName] = compDetail.fullName;
+                                                tempmetaTypesMap[compDetail.metaType] = compDetail.metaType;
+                                                commitDetailWrap.dataMap[compDetail.metaType+'#'+compDetail.fullName] = compDetail;
+                                                var crcDetail = {};
+                                                crcDetail.crcCode = compDetail.crcCode;
+                                                crcDetail.metaType = compDetail.metaType;
+                                                crcDetail.fullName = compDetail.fullName;
+                                                //crcDetail = JSON.parse(JSON.stringify(compDetail));
+                                                //delete crcDetail.base64Content;
+                                                tempCRCWrap.dataMap[compDetail.metaType+'#'+compDetail.fullName] = crcDetail;
+                                            }
+                                        }
+                                        if(typeToFolderMap[currentMetaType] != undefined && filteredMetaItems[typeToFolderMap[currentMetaType]] != undefined)
+                                        {
+                                            var folderMetadataItems = filteredMetaItems[typeToFolderMap[currentMetaType]];
+                                            for(var metaIndex=0; metaIndex < folderMetadataItems.length; metaIndex++)
+                                            {
+                                                var meta = folderMetadataItems[metaIndex];
+                                                
+                                                var compDetail = new Object();
+                                                compDetail.fullName = meta.fullName;
+                                                compDetail.fileName = meta.fileName;
+                                                compDetail.metaType = typeToFolderMap[currentMetaType];
+                                                compDetail.crcCode = 0;
+                                                compDetail.lastModifiedDate = meta.lastModifiedDate;
+                                                compDetail.lastModifiedByName = meta.lastModifiedByName;
+                                                compDetail.base64Content;
+                                                var key = currentMetaType+'#'+meta.fileName;
+                                                if(processedFolderMap[key] == undefined)
+                                                {
+                                                    if(fileMap[key] != undefined)
+                                                    {
+                                                        var fileZip = new JSZip();
+                                                        fileZip.file(meta.fileName,fileMap[key].data,{binary:true});
+                                                        compDetail.crcCode = fileMap[key].crc32;
+                                                        if(fileMap[key+"-meta.xml"] != undefined)
+                                                        {
+                                                            compDetail.crcCode = compDetail.crcCode+' '+fileMap[key+"-meta.xml"].crc32;
+                                                            fileZip.file(meta.fileName+"-meta.xml",fileMap[key+"-meta.xml"].data,{binary:true});
+                                                        }
+                                                        compDetail.base64Content = fileZip.generate({type:"base64",compression:"DEFLATE"});
+                                                    }
+                                                    else
+                                                    {
+                                                        console.log('File not found.'+key);
+                                                    }
+                                                    if(compDetail.crcCode != 0)
+                                                    {
+                                                        tempFullNamesMap[compDetail.fullName] = compDetail.fullName;
+                                                        tempmetaTypesMap[compDetail.metaType] = compDetail.metaType;
+                                                        commitDetailWrap.dataMap[compDetail.metaType+'#'+compDetail.fullName] = compDetail;
+                                                        var crcDetail = {};
+                                                        crcDetail.crcCode = compDetail.crcCode;
+                                                        crcDetail.metaType = compDetail.metaType;
+                                                        crcDetail.fullName = compDetail.fullName;
+                                                        //crcDetail = JSON.parse(JSON.stringify(compDetail));
+                                                        //delete crcDetail.base64Content;
+                                                        tempCRCWrap.dataMap[compDetail.metaType+'#'+compDetail.fullName] = crcDetail;
+                                                        processedFolderMap[key] = key;
+                                                    }
+                                                }
+                                            }
+                                        }
+                                        if(!isMapEmpty(commitDetailWrap.dataMap))
+                                        {
+                                            for(var uniqueName in tempFullNamesMap)
+                                            {
+                                                commitDetailWrap.fullNames.push(uniqueName);
+                                                tempCRCWrap.fullNames.push(uniqueName);
+                                            }
+                                            for(var uniqueName in tempmetaTypesMap)
+                                            {
+                                                commitDetailWrap.metaTypes.push(uniqueName);
+                                                tempCRCWrap.metaTypes.push(uniqueName);
+                                            }
+                                            console.log(tempCRCWrap);
+                                            var jsonStr = JSON.stringify(tempCRCWrap);
+                                            console.log('JSON string length-'+(jsonStr.length/(1024*1024))+' MB');
+                                            function checkQuickCrc(){
+                                                Visualforce.remoting.Manager.invokeAction(
+                                                '{!$RemoteAction.FL_LocalWorkspaceController.checkCrcCodeFromFlosum}',jsonStr,
+                                                function(r, e){
+                                                    if(e.status) 
+                                                    {
+                                                        console.log(r);
+                                                        if(r.notToCommit != undefined && r.safeToCommit != undefined && (r.notToCommit.length > 0 || r.safeToCommit.length > 0 ))
+                                                        {
+                                                            for(var index=0; index < r.notToCommit.length; index++)
+                                                            {
+                                                                var detail = r.notToCommit[index];
+                                                                if(detail != undefined && detail.compType != undefined && detail.compName != undefined)
+                                                                {
+                                                                    var keyComp = detail.compType+'#'+detail.compName;
+                                                                    if(commitDetailWrap.dataMap[keyComp] != undefined)
+                                                                    {
+                                                                        commitDetailWrap.dataMap[keyComp].reason = detail.reason;
+                                                                        commitDetailWrap.dataMap[keyComp].version = detail.version;
+                                                                        delete commitDetailWrap.dataMap[keyComp].base64Content;
+                                                                    }
+                                                                }
+                                                            }
+                                                            console.log(commitDetailWrap);
+                                                            var base64JsonStr = JSON.stringify(commitDetailWrap);
+                                                            createTempRecordsForCommit(base64JsonStr);
+                                                        }
+                                                        else
+                                                        {
+                                                            cotinueCheckRetrievalStatus();
+                                                        }
+                                                    }
+                                                    else
+                                                    {
+                                                        angular.element(document.getElementById('angularControllerId')).scope().showErrorMessage(e.message);
+                                                    }
+                                                });
+                                            }
+                                            checkQuickCrc();
+                                        }
+                                        else
+                                        {
+                                            console.log('No item found.');
+                                            cotinueCheckRetrievalStatus();
+                                        }
+                                    }
+                                    else
+                                    {
+                                        console.log('Length greater than 3MB.');
+                                        if(currentAsyncDetail.Items.length > 1)
+                                        {
+                                            breakRetrievalRequest(currentAsyncId);
+                                        }
+                                        else
+                                        {
+                                            cotinueCheckRetrievalStatus();
+                                        }
+                                    }
+                                }
+                            }
+                            else
+                            {
+                                console.log('Creating file on server.');
+                                RemainingAsyncIdLi.push(currentAsyncId);
+                                cotinueCheckRetrievalStatus();
+                            }
+                        }
+                    }
+                });
+            }
+            else
+            {
+                AsyncIdsLi = [];
+                AsyncIdsIndex = 0;
+                if(RemainingAsyncIdLi.length > 0)
+                {
+                    for(var index=0; index < RemainingAsyncIdLi.length; index++ )
+                    {
+                        AsyncIdsLi.push(RemainingAsyncIdLi[index]);
+                    }
+                    RemainingAsyncIdLi = [];
+                }
+                if(AsyncIdsLi.length > 0)
+                {
+                    AsyncIdsIndex = -1;
+                    setTimeout(cotinueCheckRetrievalStatus, 1000);
+                }
+                else if(currentRequestLi.length > 0)
+                {
+                    currentRequestIndex = 0;
+                    AsyncIdMap = {};
+                    setTimeout(processRequestForRetrieval, 005);
+                }
+                else
+                {
+                    nextTypeForRetrieval();
+                }
+            }
+        }
+        
+        function isMapEmpty(tempMap)
+        {
+            for(key in tempMap)
+            {
+                return false;
+            }
+            return true;
+        }
+        
+        function nextTypeForRetrieval()
+        {
+            requestIndex++;
+            //createRequestForRetrieval(logId,'');
+            angular.element(document.getElementById('angularControllerId')).scope().finishRetrieval();
+        }
+        
+        function breakRetrievalRequest(currentAsyncId)
+        {
+            //var currentAsyncId = AsyncIdsLi[AsyncIdsIndex];
+            var currentAsyncDetail = AsyncIdMap[currentAsyncId];
+            var currentMetaType = currentAsyncDetail.MetaType;
+            var items = currentAsyncDetail.Items;
+            var oneTypeMetaItems = [];
+            //var localLimit = currentAsyncDetail.Items.length;
+            var localLimit = Math.floor(currentAsyncDetail.Items.length *.50);
+                
+            for(var index=0; index< items.length; index++)
+            {
+                if(index != 0 && index % localLimit == 0)
+                {
+                    var requestDetail = {};
+                    requestDetail.MetaType = currentMetaType;
+                    requestDetail.Items = oneTypeMetaItems;
+                    requestDetail.ItemNames = [];
+                    requestDetail.IsFirst = false;
+                    var folderNameMap = {};
+                    for(var tempIndex in oneTypeMetaItems)
+                    {
+                        if(tempIndex < oneTypeMetaItems.length)
+                        {
+                            var temoFileName = oneTypeMetaItems[tempIndex].fullName;
+                            requestDetail.ItemNames.push(temoFileName);
+                            if(typeToFolderMap[currentMetaType] != undefined && temoFileName.indexOf('/') > -1)
+                            {
+                                var folderName = temoFileName.slice(0,temoFileName.indexOf('/'));
+                                folderNameMap[folderName] = folderName;
+                            }
+                        }
+                    }
+                    for(var folderName in folderNameMap)
+                    {
+                        requestDetail.ItemNames.push(folderName);
+                    }
+                    currentRequestLi.push(requestDetail);
+                    oneTypeMetaItems = [];
+                }
+                oneTypeMetaItems.push(items[index]);
+            }
+            if(oneTypeMetaItems.length > 0)
+            {
+                var requestDetail = {};
+                requestDetail.MetaType = currentMetaType;
+                requestDetail.Items = oneTypeMetaItems;
+                requestDetail.ItemNames = [];
+                requestDetail.IsFirst = true;
+                var folderNameMap = {};
+                for(var tempIndex in oneTypeMetaItems)
+                {
+                    if(tempIndex < oneTypeMetaItems.length)
+                    {
+                        var temoFileName = oneTypeMetaItems[tempIndex].fullName;
+                        requestDetail.ItemNames.push(temoFileName);
+                        if(typeToFolderMap[currentMetaType] != undefined && temoFileName.indexOf('/') > -1)
+                        {
+                            var folderName = temoFileName.slice(0,temoFileName.indexOf('/'));
+                            folderNameMap[folderName] = folderName;
+                        }
+                    }
+                }
+                for(var folderName in folderNameMap)
+                {
+                    requestDetail.ItemNames.push(folderName);
+                }
+                currentRequestLi.push(requestDetail);
+            }
+            cotinueCheckRetrievalStatus();
+        }
+        
+        function checkExceptionOnComplete(tempLogId,exceptionMessage)
+        {
+            console.log('tempLogId-----------'+tempLogId);
+            console.log('exceptionMessage----'+exceptionMessage);
+            if(tempLogId != undefined && tempLogId != null && tempLogId.length == 18)
+            {
+                cotinueCheckRetrievalStatus();
+            }
+            else
+            {
+                angular.element(document.getElementById('angularControllerId')).scope().showErrorMessage(exceptionMessage);
+            }
+        }
+        
+        function cotinueCheckRetrievalStatus()
+        {
+            AsyncIdsIndex++;
+            setTimeout(checkRetrievalStatus, 10000);
+        }
+        
+        function getRetrieveRequest()
+        {
+            var retrieveRequest = new Object();
+            retrieveRequest.apiVersion = apiVersion;
+            retrieveRequest.singlePackage = true;
+            retrieveRequest.unpackaged = {};
+            retrieveRequest.unpackaged.types = [];
+            return retrieveRequest;
+        }
+         
+        //Create Connection
+        function createSelfConnection()
+        {
+            var conn = new flosumsf.Connection({ accessToken: '{!$Api.Session_Id}' });
+            conn.metadata.pollTimeout = 12000000;
+            conn.metadata.pollInterval = 4000;
+            return conn;
+        }
+        
+        //Qyery Components
+        function listComponents()
+        {     
+            remainingTypesMap = {};
+            filteredMetaItems = {};
+            var selectedTypes = [];
+            var filterLogic = angular.element(document.getElementById('angularControllerId')).scope().enableFilterLogic;
+            var localFilterList = [];
+            var tempFilterList = angular.element(document.getElementById('angularControllerId')).scope().mainFilterList;
+            for(var index=0; index < tempFilterList.length; index++)
+            {
+                var filterRow = tempFilterList[index];
+                if(filterRow != undefined && filterRow.field == 'type' && filterRow.value != undefined && filterRow.value != '' && filterRow.operator != undefined && filterRow.operator != '')
+                {
+                    localFilterList.push(filterRow);
+                }
+            }
+            if(angular.element(document.getElementById('angularControllerId')).scope().selectedCategory == 'all')
+            {
+                var angMetaTypeLi = angular.element(document.getElementById('angularControllerId')).scope().metaTypeLi;
+                for(var index=0; index < angMetaTypeLi.length; index++)
+                {
+                    var metaType = angMetaTypeLi[index];
+                    if(metaType != undefined && metaType != '' )
+                    {
+                        if(filterLogic)
+                        {
+                            selectedTypes.push(metaType);
+                        }
+                        else
+                        {
+                            var finalResult = true;
+                            for(var index2=0; index2 < localFilterList.length; index2++)
+                            {
+                                var filterRow = localFilterList[index2];
+                                finalResult = checkValidCondition(metaType.toLowerCase(),filterRow.value.toLowerCase(),filterRow.operator,'type');
+                                if(!finalResult)
+                                    break;
+                            }
+                            if(finalResult)
+                                selectedTypes.push(metaType);
+                        }
+                    }
+                }
+            }
+            else
+            {
+                selectedTypes =  angular.element(document.getElementById('angularControllerId')).scope().selectedToRetrievChanges;
+            }
+            console.log(selectedTypes);
+            //var selectedTypes = ['ApexClass','ApexPage','CustomObject','ApexComponent','Layout','CustomObjectTranslation'];
+            if(selectedTypes != undefined && selectedTypes.length > 0) 
+            {
+                setDefaultMessageOnPage('Retrieving Changes...');
+                var metaLi = selectedTypes;
+                if(metaLi.length > 0)
+                {
+                    //filterValue = 0;
+                    var queryIndex = 0;
+                    var queryMetadataTypesOneByOne = function(){
+                        if(queryIndex < metaLi.length)
+                        {
+                            var metaType = metaLi[queryIndex];
+                            if(differentRetrievalMap[metaType] != undefined)
+                            {
+                                remainingTypesMap[metaType] = metaType;
+                                queryIndex++;
+                                queryMetadataTypesOneByOne();
+                            }
+                            else
+                            {
+                                console.log('Query---'+metaType);
+                                setDefaultMessageOnPage('Retrieving Changes for '+metaType+'...');
+                                var queryLi = [];
+                                var query = new Object();
+                                query.folder = '';
+                                query.type = metaType;
+                                queryLi.push(query);
+                                //setMessageOnPage("Finding out components changed for "+metaTypesLi[queryIndex]+".");
+                                selfConn.metadata.list(queryLi, ''+apiVersion, function(err, result){
+                                    if(err)
+                                    {
+                                        console.log(err);
+                                    }
+                                    else
+                                    {
+                                        var metaItemLi = [];
+                                        var uniqueMetaItemMap = {};
+                                        if(Array.isArray(result))
+                                        {
+                                            for(var index in result)
+                                            {
+                                                if(index < result.length)
+                                                {
+                                                    var meta = result[index];
+                                                    if(meta != undefined && meta.lastModifiedDate != undefined)
+                                                    {
+                                                        var metaLastModifiedDate = new Date(meta.lastModifiedDate).getTime();
+                                                        if(manageableStateToRetrieve[meta.manageableState] != undefined && (filterValue == 0 || metaLastModifiedDate > filterValue || (metaLastModifiedDate == 0 && retrieveStandardComponent)))
+                                                        {
+                                                            
+                                                            if(meta.fileName != null && meta.fileName != undefined ) 
+                                                            {
+                                                                if(meta.type == 'ManagedTopics')
+                                                                {
+                                                                    if(meta.fileName.indexOf('ManagedTopics/') == 0)
+                                                                        meta.fileName = meta.fileName.replace('ManagedTopics/','managedTopics/');
+                                                                    meta.fileName = decodeURI(meta.fileName);
+                                                                }
+                                                                else if(meta.type == 'Workflow' && meta.fileName.indexOf('Workflow/') == 0)
+                                                                {
+                                                                    meta.fileName = meta.fileName.replace('Workflow/','workflows/');
+                                                                }
+                                                                else if(meta.type == 'MatchingRules' && meta.fileName.indexOf('MatchingRules/') == 0)
+                                                                {
+                                                                    meta.fileName = meta.fileName.replace('MatchingRules/','matchingRules/');
+                                                                }
+                                                                else if(meta.type == 'SynonymDictionary' && meta.fullname == '_Default')
+                                                                {
+                                                                    meta.fileName = 'synonymDictionaries/_Default.synonymDictionary';
+                                                                }                                
+                                                            }
+                                                            if(!uniqueMetaItemMap[meta.fullname] != undefined && getVisibileState(meta))
+                                                            {
+                                                                metaItemLi.push(meta);
+                                                                uniqueMetaItemMap[meta.fullname] = meta.fullname;
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                        else
+                                        {
+                                            var meta = result;
+                                            if(meta != undefined && meta.lastModifiedDate != undefined)
+                                            {
+                                                var metaLastModifiedDate = new Date(meta.lastModifiedDate).getTime();
+                                                if(manageableStateToRetrieve[meta.manageableState] != undefined && (filterValue == 0 || metaLastModifiedDate > filterValue || (metaLastModifiedDate == 0 && retrieveStandardComponent)))
+                                                {
+                                                    if(getVisibileState(meta))
+                                                        metaItemLi.push(meta);
+                                                }
+                                            }
+                                        }
+                                        if(metaItemLi.length > 0)
+                                            filteredMetaItems[metaType] = metaItemLi;
+                                    }
+                                    queryIndex++;
+                                    queryMetadataTypesOneByOne();
+                                });
+                            }
+                        }
+                        else
+                        {
+                            listPermissionItems();
+                        }
+                    }
+                    queryMetadataTypesOneByOne();
+                }
+            }
+            else
+            {
+                angular.element(document.getElementById('angularControllerId')).scope().disableRetrieveChangesButton = false;
+                angular.element(document.getElementById('angularControllerId')).scope().showErrorMessage('Please select a component type.');
+            }
+        }
+        
+        function listPermissionItems()
+        {
+            if(filteredMetaItems['Profile'] != undefined || filteredMetaItems['PermissionSet'] != undefined)
+            {
+                var queryLi = [];
+                var query = new Object();
+                query.folder = '';
+                query.type = 'CustomObject';
+                queryLi.push(query);
+                selfConn.metadata.list(queryLi, ''+apiVersion, function(err, result){
+                    if(err)
+                    {
+                        console.log(err);
+                    }
+                    else
+                    {
+                        var tempLi = [];
+                        if(Array.isArray(result))
+                        {
+                            for(var index in result)
+                            {
+                                if(index < result.length)
+                                {
+                                    var meta = result[index];
+                                    if(meta != undefined && meta.fullName != undefined)
+                                    {
+                                        tempLi.push(meta.fullName);
+                                    }
+                                }
+                            }
+                        }
+                        else
+                        {
+                            var meta = result;
+                            if(meta != undefined && meta.fullName != undefined)
+                            {
+                                tempLi.push(meta.fullName);
+                            }
+                        }
+                        if(tempLi.length > 0)
+                            permissionMap['CustomObject'] = tempLi;
+                    }
+                    flowQuery();
+               });
+            }
+            else
+            {
+                flowQuery();
+            }
+        }
+        
+        function flowQuery()
+        {
+            if(remainingTypesMap['Flow'] != undefined)
+            {
+                console.log('Query---Flow');
+                setDefaultMessageOnPage('Retrieving Changes for Flow...');
+                var queryLi = [];
+                var query = new Object();
+                query.folder = '';
+                query.type = 'Flow';
+                queryLi.push(query);
+                selfConn.metadata.list(queryLi, ''+apiVersion, function(err, result){
+                    if(err)
+                    {
+                        console.log(err);
+                    }
+                    else
+                    {
+                        var tempLi = [];
+                        if(Array.isArray(result))
+                        {
+                            for(var index in result)
+                            {
+                                if(index < result.length)
+                                {
+                                    var meta = result[index];
+                                    if(meta != undefined && meta.lastModifiedDate != undefined)
+                                    {
+                                        var metaLastModifiedDate = new Date(meta.lastModifiedDate).getTime();
+                                        if(manageableStateToRetrieve[meta.manageableState] != undefined && (filterValue == 0 || metaLastModifiedDate > filterValue || (metaLastModifiedDate == 0 && retrieveStandardComponent)))
+                                        {
+                                            tempLi.push(meta);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        else
+                        {
+                            var meta = result;
+                            if(meta != undefined && meta.lastModifiedDate != undefined)
+                            {
+                                var metaLastModifiedDate = new Date(meta.lastModifiedDate).getTime();
+                                if(manageableStateToRetrieve[meta.manageableState] != undefined && (filterValue == 0 || metaLastModifiedDate > filterValue || (metaLastModifiedDate == 0 && retrieveStandardComponent)))
+                                {
+                                
+                                    tempLi.push(meta);
+                                }
+                            }
+                        }
+                        if(tempLi.length > 0)
+                        {
+                            var metaItemLi = [];
+                            var toolingIndex = 0;
+                            function queryByToolingOneByOne(){
+                                if(toolingIndex < tempLi.length)
+                                {
+                                    var meta = tempLi[toolingIndex];
+                                    selfConn.tooling.sobject('Flow').find({'Id':meta.id}).execute(function(err, records) {
+                                        if(err) 
+                                        {
+                                            return console.error(err); 
+                                        }
+                                        else
+                                        {
+                                            if(records.length > 0 && records[0].FullName != undefined)
+                                            {
+                                                meta.fullName = records[0].FullName;
+                                                meta.fileName = 'flows/'+meta.fullName+'.flow';
+                                                if(getVisibileState(meta))
+                                                    metaItemLi.push(meta);
+                                            }
+                                        }
+                                        toolingIndex++;
+                                        queryByToolingOneByOne();
+                                    });
+                                }
+                                else
+                                {
+                                    if(metaItemLi.length > 0)
+                                    {
+                                        filteredMetaItems['Flow'] = metaItemLi;
+                                    }
+                                    customFieldQuery();
+                                }
+                            }
+                            queryByToolingOneByOne();
+                        }
+                        else
+                        {
+                            customFieldQuery();
+                        }
+                    }
+                });
+            }
+            else
+            {
+                customFieldQuery();
+            }
+        }
+        
+        function customFieldQuery()
+        {
+            if(remainingTypesMap['CustomField'] != undefined || remainingTypesMap['SharingOwnerRule'] != undefined || remainingTypesMap['SharingCriteriaRule'] != undefined)
+            {
+                var logStr = '';
+                for(var key in remainingTypesMap)
+                {
+                    if(key == 'CustomField' || key == 'SharingOwnerRule' || key == 'SharingCriteriaRule')
+                    {
+                        logStr = logStr == '' ? key : logStr+','+key;
+                    }
+                }
+                console.log('Query---'+logStr);
+                setDefaultMessageOnPage('Retrieving Changes for '+logStr+'...');
+                var queryLi = [];
+                var query = new Object();
+                query.folder = '';
+                query.type = 'CustomObject';
+                queryLi.push(query);
+                selfConn.metadata.list(queryLi, ''+apiVersion, function(err, result){
+                    if(err)
+                    {
+                        return console.log(err);
+                    }
+                    else
+                    {
+                        if(result != undefined && result.length > 0)
+                        {
+                            var childTypeMetaMap = {};
+                            var queryChildIndex = 0;
+                            function queryChildsOneByOne(){
+                                if(queryChildIndex < result.length)
+                                {
+                                    var folder = result[queryChildIndex].fullName;
+                                    var query2Li = [];
+                                    for(var key in remainingTypesMap)
+                                    {
+                                        if(key == 'CustomField' || key == 'SharingOwnerRule' || key == 'SharingCriteriaRule')
+                                        {
+                                            var query2 = new Object();
+                                            query2.folder = folder;
+                                            query2.type = key;
+                                            query2Li.push(query2);
+                                        }
+                                    }
+                                    selfConn.metadata.list(query2Li, ''+apiVersion, function(err, result2){
+                                        if(err)
+                                        {
+                                            return console.log(err);
+                                        }
+                                        else
+                                        {
+                                            if(Array.isArray(result2))
+                                            {
+                                                for(var index in result2)
+                                                {
+                                                    if(index < result2.length)
+                                                    {
+                                                        var meta = result2[index];
+                                                        if(meta != undefined && meta.lastModifiedDate != undefined && meta.fullName != undefined)
+                                                        {
+                                                            var metaLastModifiedDate = new Date(meta.lastModifiedDate).getTime();
+                                                            if(manageableStateToRetrieve[meta.manageableState] != undefined && (filterValue == 0 || metaLastModifiedDate > filterValue || (metaLastModifiedDate == 0 && retrieveStandardComponent)))
+                                                            {
+                                                                if(meta.type == 'CustomField')
+                                                                {
+                                                                    if((!meta.fullName.endsWith('__c')) && (!meta.fullName.indexOf(folder +'.') == 0))
+                                                                    {
+                                                                        meta.fileName = 'objects/'+ folder +'.object';
+                                                                        meta.fullName = folder +'.'+ meta.fullName;
+                                                                    }
+                                                                }
+                                                                if(getVisibileState(meta))
+                                                                {
+                                                                    var childLi = [];
+                                                                    if(childTypeMetaMap[meta.type] != undefined)
+                                                                    {
+                                                                        childLi = childTypeMetaMap[meta.type];
+                                                                    }
+                                                                    childLi.push(meta);
+                                                                    childTypeMetaMap[meta.type] = childLi;
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                            else
+                                            {
+                                                var meta = result2;
+                                                if(meta != undefined && meta.lastModifiedDate != undefined)
+                                                {
+                                                    var metaLastModifiedDate = new Date(meta.lastModifiedDate).getTime();
+                                                    if(manageableStateToRetrieve[meta.manageableState] != undefined && (filterValue == 0 || metaLastModifiedDate > filterValue || (metaLastModifiedDate == 0 && retrieveStandardComponent)))
+                                                    {
+                                                        if(meta.type == 'CustomField')
+                                                        {
+                                                            if(!meta.fullName.endsWith('__c') && !meta.fullName.indexOf(folder +'.') == 0)
+                                                            {
+                                                                meta.fileName = 'objects/'+ folder +'.object';
+                                                                meta.fullName = folder +'.'+ meta.fullName;
+                                                            }
+                                                        }
+                                                        if(getVisibileState(meta))
+                                                        {
+                                                            var childLi = [];
+                                                            if(childTypeMetaMap[meta.type] != undefined)
+                                                            {
+                                                                childLi = childTypeMetaMap[meta.type];
+                                                            }
+                                                            childLi.push(meta);
+                                                            childTypeMetaMap[meta.type] = childLi;
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                            queryChildIndex++;
+                                            queryChildsOneByOne();
+                                        }
+                                    });
+                                }
+                                else
+                                {
+                                    for(var key in childTypeMetaMap)
+                                    {
+                                        filteredMetaItems[key] = childTypeMetaMap[key];
+                                    }
+                                    folderQuery();
+                                }
+                            }
+                            queryChildsOneByOne();
+                        }
+                    }
+                });
+            }
+            else
+            {
+                folderQuery();
+            }
+        }
+        
+        function folderQuery()
+        {
+            if(remainingTypesMap['Document'] != undefined || remainingTypesMap['Dashboard'] != undefined || remainingTypesMap['Report'] != undefined || remainingTypesMap['EmailTemplate'] != undefined)
+            {
+                var folderQueryLi = [];
+                var folder = '';
+                for(var key in remainingTypesMap)
+                {
+                    if(key == 'Document' || key == 'Dashboard' || key == 'Report' || key == 'EmailTemplate')
+                    {
+                        setDefaultMessageOnPage('Retrieving Changes for '+key+'...');
+                        var query2 = new Object();
+                        query2.folder = folder;
+                        query2.type = typeToFolderMap[key];
+                        folderQueryLi.push(query2);
+                        console.log('Query---'+key);
+                    }
+                }
+                var folderQueryIndex = 0;
+                var queryFolderOneByOne = function(){
+                    if(folderQueryIndex < folderQueryLi.length)
+                    {
+                        var queryLi = [];
+                        var query = folderQueryLi[folderQueryIndex];
+                        queryLi.push(query);
+                        selfConn.metadata.list(queryLi, ''+apiVersion, function(err, result){
+                            if(err)
+                            {
+                                console.log(err);
+                            }
+                            else
+                            {
+                                var tempLi = [];
+                                if(Array.isArray(result))
+                                {
+                                    for(var index in result)
+                                    {
+                                        if(index < result.length)
+                                        {
+                                            var meta = result[index];
+                                            if(meta != undefined && meta.lastModifiedDate != undefined)
+                                            {
+                                                /*var metaLastModifiedDate = new Date(meta.lastModifiedDate).getTime();
+                                                if(manageableStateToRetrieve[meta.manageableState] != undefined && (filterValue == 0 || metaLastModifiedDate > filterValue || (metaLastModifiedDate == 0 && retrieveStandardComponent)))
+                                                {*/
+                                                    meta.fileName = meta.fileName+'-meta.xml';
+                                                    tempLi.push(meta);
+                                                //}
+                                            }
+                                        }
+                                    }
+                                }
+                                else
+                                {
+                                    var meta = result;
+                                    if(meta != undefined && meta.lastModifiedDate != undefined)
+                                    {
+                                        /*var metaLastModifiedDate = new Date(meta.lastModifiedDate).getTime();
+                                        if(manageableStateToRetrieve[meta.manageableState] != undefined && (filterValue == 0 || metaLastModifiedDate > filterValue || (metaLastModifiedDate == 0 && retrieveStandardComponent)))
+                                        {*/
+                                            meta.fileName = meta.fileName+'-meta.xml';
+                                            tempLi.push(meta);
+                                        //}
+                                    }
+                                }
+                                if(tempLi.length > 0)
+                                {
+                                    var folderTempLi = [];
+                                    for(var metaindex = 0; metaindex < tempLi.length; metaindex++)
+                                    {
+                                        var meta = tempLi[metaindex];
+                                        var metaLastModifiedDate = new Date(meta.lastModifiedDate).getTime();
+                                        if(manageableStateToRetrieve[meta.manageableState] != undefined && (filterValue == 0 || metaLastModifiedDate > filterValue || (metaLastModifiedDate == 0 && retrieveStandardComponent)))
+                                        {
+                                            if(getVisibileState(meta))
+                                                folderTempLi.push(meta);
+                                        }
+                                    }
+                                    filteredMetaItems[query.type]= folderTempLi;
+                                }
+                                
+                                var queryChildIndex = 0;
+                                var folderItems = [];
+                                var queryChildOfFolderOneByOne = function(){
+                                    if(queryChildIndex < tempLi.length)
+                                    {
+                                        var childQueryLi =  [];
+                                        for(var childIndex = 0; childIndex < 3 && queryChildIndex < tempLi.length; childIndex++)
+                                        {
+                                            var query2 = new Object();
+                                            query2.folder = tempLi[queryChildIndex].fullName;
+                                            query2.type = folderToTypeMap[query.type];
+                                            childQueryLi.push(query2);
+                                            queryChildIndex++;
+                                        }
+                                        selfConn.metadata.list(childQueryLi, ''+apiVersion, function(err, result){
+                                            if(err)
+                                            {
+                                                console.log(err);
+                                            }
+                                            else
+                                            {
+                                                if(Array.isArray(result))
+                                                {
+                                                    for(var index in result)
+                                                    {
+                                                        if(index < result.length)
+                                                        {
+                                                            var meta = result[index];
+                                                            if(meta != undefined && meta.lastModifiedDate != undefined)
+                                                            {
+                                                                var metaLastModifiedDate = new Date(meta.lastModifiedDate).getTime();
+                                                                if(manageableStateToRetrieve[meta.manageableState] != undefined && (filterValue == 0 || metaLastModifiedDate > filterValue || (metaLastModifiedDate == 0 && retrieveStandardComponent)))
+                                                                {
+                                                                    if(getVisibileState(meta))
+                                                                        folderItems.push(meta);
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                                else
+                                                {
+                                                    var meta = result;
+                                                    if(meta != undefined && meta.lastModifiedDate != undefined)
+                                                    {
+                                                        var metaLastModifiedDate = new Date(meta.lastModifiedDate).getTime();
+                                                        if(manageableStateToRetrieve[meta.manageableState] != undefined && (filterValue == 0 || metaLastModifiedDate > filterValue || (metaLastModifiedDate == 0 && retrieveStandardComponent)))
+                                                        {
+                                                            if(getVisibileState(meta))
+                                                                folderItems.push(meta);
+                                                        }
+                                                    }
+                                                }
+                                                queryChildOfFolderOneByOne();    
+                                            }
+                                        });
+                                    }
+                                    else
+                                    {
+                                        if(folderItems.length > 0)
+                                        {
+                                            filteredMetaItems[folderToTypeMap[query.type]]= folderItems;
+                                        }
+                                                
+                                        folderQueryIndex++;
+                                        queryFolderOneByOne();
+                                    }
+                                }
+                                queryChildOfFolderOneByOne();
+                            }
+                        });
+                    }
+                    else
+                    {
+                        //Done
+                        angular.element(document.getElementById('angularControllerId')).scope().createListOnFinishOfQuery();
+                    }
+                }
+                queryFolderOneByOne();  
+            }
+            else
+            {
+                //Done
+                angular.element(document.getElementById('angularControllerId')).scope().createListOnFinishOfQuery();
+            }
+        }
+        
+        function createFileMap(tempComponentType,base64str)
+        {
+            var tempZip = new JSZip(base64str,{base64:true});
+            console.log(tempZip.files);
+            if(tempComponentType == 'Profile' || tempComponentType == 'PermissionSet')
+            {
+                for(var fileName in tempZip.files)
+                {
+                    if(fileName != undefined && (fileName.indexOf("profiles/") == 0 || fileName.indexOf("permissionsets/") == 0)) 
+                    {
+                        var fileData = tempZip.files[fileName].asText();
+                        fileMap[tempComponentType+"#"+fileName] = getCrcWithData(fileData);
+                    }
+                }
+            }
+            else if(mmap[tempComponentType] == undefined)
+            {
+                for(var fileName in tempZip.files)
+                {
+                    if(fileName != undefined && fileName.charAt(fileName.length - 1) != '/' && fileName != 'package.xml') 
+                    {
+                        var fileData = tempZip.files[fileName].asBinary();
+                        fileMap[tempComponentType+"#"+fileName] = getCrcWithData(fileData);
+                    }
+                }
+            }
+            else
+            {
+                for(var fileName in tempZip.files)
+                {
+                    if(fileName != undefined && fileName.charAt(fileName.length - 1) != '/' && fileName != 'package.xml') 
+                    {
+                        getChildFileMap(tempComponentType,tempZip.files[fileName].asText(),fileName);
+                    }
+                }
+            }
+        }
+        
+        function getChildFileMap(metaType,xml,fileName)
+        {
+            var fullName = '';
+            if(metaType != 'CustomLabel')
+            {
+                fullName = fileName.slice(fileName.indexOf("/")+1,fileName.lastIndexOf('.'))+".";
+            }
+    
+            var x2js = new X2JS();
+            var jsnMap ={};
+            var tempJSON = '';
+            var srcjson = x2js.xml_str2json(xml);
+            if(srcjson != undefined && srcjson != null)
+            {
+                var srcitems;
+                if(metaType == 'CustomLabel')
+                {
+                    var srcMetaItem = srcjson.CustomLabels;
+                    srcitems = srcMetaItem.labels;
+                }
+                else if(metaType == 'CustomField')
+                {
+                    var srcMetaItem = srcjson.CustomObject;
+                    srcitems = srcMetaItem.fields;
+                }
+                else if(metaType == 'ListView')
+                {
+                    var srcMetaItem = srcjson.CustomObject;
+                    srcitems = srcMetaItem.listViews;
+                }
+                else if(metaType == 'CompactLayout')
+                {
+                    var srcMetaItem = srcjson.CustomObject;
+                    srcitems = srcMetaItem.compactLayouts;
+                }
+                else if(metaType == 'WebLink')
+                {
+                    var srcMetaItem = srcjson.CustomObject;
+                    srcitems = srcMetaItem.webLinks;
+                }
+                else if(metaType == 'RecordType')
+                {
+                    var srcMetaItem = srcjson.CustomObject;
+                    srcitems = srcMetaItem.recordTypes;
+                }
+                else if(metaType == 'FieldSet')
+                {
+                    var srcMetaItem = srcjson.CustomObject;
+                    srcitems = srcMetaItem.fieldSets;
+                }
+                else if(metaType == 'ValidationRule')
+                {
+                    var srcMetaItem = srcjson.CustomObject;
+                    srcitems = srcMetaItem.validationRules;
+                }
+                else if(metaType == 'AssignmentRule')
+                {
+                    var srcMetaItem = srcjson.AssignmentRules;
+                    srcitems = srcMetaItem.assignmentRule;
+                }
+                else if(metaType == 'AutoResponseRule')
+                {
+                    var srcMetaItem = srcjson.AutoResponseRules;
+                    srcitems = srcMetaItem.autoResponseRule;
+                }
+                else if(metaType == 'WorkflowTask')
+                {
+                    var srcMetaItem = srcjson.Workflow;
+                    srcitems = srcMetaItem.tasks;
+                }
+                else if(metaType == 'WorkflowOutboundMessage')
+                {
+                    var srcMetaItem = srcjson.Workflow;
+                    srcitems = srcMetaItem.outboundMessages;
+                }
+                else if(metaType == 'WorkflowFieldUpdate')
+                {
+                    var srcMetaItem = srcjson.Workflow;
+                    srcitems = srcMetaItem.fieldUpdates;
+                }
+                else if(metaType == 'WorkflowAlert')
+                {
+                    var srcMetaItem = srcjson.Workflow;
+                    srcitems = srcMetaItem.alerts;
+                }
+                else if( metaType == 'WorkflowRule')
+                {
+                    var srcMetaItem = srcjson.Workflow;
+                    srcitems = srcMetaItem.rules;
+                }
+                else if(metaType == 'SharingCriteriaRule')
+                {
+                    var srcMetaItem = srcjson.SharingRules;
+                    srcitems = srcMetaItem.sharingCriteriaRules;
+                }
+                else if(metaType == 'SharingOwnerRule')
+                {
+                    var srcMetaItem = srcjson.SharingRules;
+                    srcitems = srcMetaItem.sharingOwnerRules;
+                }
+                else if(metaType == 'BusinessProcess')
+                {
+                    var srcMetaItem = srcjson.CustomObject;
+                    srcitems = srcMetaItem.businessProcesses;
+                }
+                else if(metaType == 'SharingReason')
+                {
+                    var srcMetaItem = srcjson.CustomObject;
+                    srcitems = srcMetaItem.sharingReasons;
+                }
+                else if(metaType == 'EscalationRule')
+                {
+                    var srcMetaItem = srcjson.EscalationRules;
+                    srcitems = srcMetaItem.escalationRule;
+                }
+                else if(metaType == 'MatchingRule')    
+                {
+                    var srcMetaItem = srcjson.MatchingRules;
+                    srcitems = srcMetaItem.matchingRules;
+                }
+                else if(metaType == 'ManagedTopic')
+                {
+                    var srcMetaItem = srcjson.ManagedTopics;
+                    srcitems = srcMetaItem.ManagedTopic;
+                }
+                if(srcitems != undefined)
+                {
+                    if(srcitems.fullName == undefined)
+                    {   
+                        for(var i in srcitems)  
+                        {
+                            if(i < srcitems.length)
+                            {
+                                var v = srcitems[i];
+                                jsnMap[v.fullName]= JSON.stringify(v);
+                            }
+                        }            
+                    }
+                    else
+                    {
+                        jsnMap[srcitems.fullName] = JSON.stringify(srcitems);
+                    }
+                }
+            }
+            for(var name in jsnMap)
+            {
+                var tempXml = '';
+                var tempJSON = jsnMap[name];
+                if(tempJSON != undefined)
+                {
+                    //header
+                    if(metaType == 'CustomLabel')
+                    {
+                        tempXml = '<?xml version="1.0" encoding="UTF-8"?><CustomLabels xmlns="http://soap.sforce.com/2006/04/metadata">';
+                    }
+                    else if(metaType == 'AssignmentRule' )
+                    {
+                        tempXml = '<?xml version="1.0" encoding="UTF-8"?><AssignmentRules xmlns="http://soap.sforce.com/2006/04/metadata">';
+                    }
+                    else if(metaType == 'AutoResponseRule')
+                    {
+                        tempXml = '<?xml version="1.0" encoding="UTF-8"?><AutoResponseRules xmlns="http://soap.sforce.com/2006/04/metadata">';
+                    }
+                    else if(metaType == 'WorkflowAlert' || metaType == 'WorkflowFieldUpdate'|| metaType == 'WorkflowOutboundMessage'|| metaType == 'WorkflowTask' || metaType == 'WorkflowRule')
+                    {
+                        tempXml = '<?xml version="1.0" encoding="UTF-8"?><Workflow xmlns="http://soap.sforce.com/2006/04/metadata">';
+                    }
+                    else if(metaType == 'SharingCriteriaRule' || metaType == 'SharingOwnerRule')
+                    {
+                        tempXml = '<?xml version="1.0" encoding="UTF-8"?><SharingRules xmlns="http://soap.sforce.com/2006/04/metadata">';
+                    }
+                    else if(metaType == 'EscalationRule')
+                    {
+                        tempXml = '<?xml version="1.0" encoding="UTF-8"?><EscalationRules xmlns="http://soap.sforce.com/2006/04/metadata">';
+                    }
+                    else if(metaType == 'MatchingRule')
+                    {
+                        tempXml = '<?xml version="1.0" encoding="UTF-8"?><MatchingRules xmlns="http://soap.sforce.com/2006/04/metadata">';
+                    }
+                    else if(metaType == 'ManagedTopic')
+                    {
+                        tempXml = '<?xml version="1.0" encoding="UTF-8"?><ManagedTopics xmlns="http://soap.sforce.com/2006/04/metadata">';
+                    }
+                    else
+                    {
+                        tempXml = '<?xml version="1.0" encoding="UTF-8"?><CustomObject xmlns="http://soap.sforce.com/2006/04/metadata">';
+                    }
+                    
+                    //body
+                    if(metaType == 'CustomLabel')
+                    {
+                        tempXml = tempXml +'<labels>'+x2js.json2xml_str($.parseJSON(tempJSON))+'</labels>';
+                    }
+                    else if(metaType == 'CustomField')
+                    {
+                        tempXml = tempXml +'<fields>'+x2js.json2xml_str($.parseJSON(tempJSON))+'</fields>';
+                    }
+                    else if(metaType == 'ListView')
+                    {
+                        tempXml = tempXml +'<listViews>'+x2js.json2xml_str($.parseJSON(tempJSON))+'</listViews>';
+                    }
+                    else if(metaType == 'CompactLayout')
+                    {
+                        tempXml = tempXml +'<compactLayouts>'+x2js.json2xml_str($.parseJSON(tempJSON))+'</compactLayouts>';
+                    }
+                    else if(metaType == 'WebLink')
+                    {
+                        tempXml = tempXml +'<webLinks>'+x2js.json2xml_str($.parseJSON(tempJSON))+'</webLinks>';
+                    }
+                    else if(metaType == 'RecordType')
+                    {
+                        tempXml = tempXml +'<recordTypes>'+x2js.json2xml_str($.parseJSON(tempJSON))+'</recordTypes>';
+                    }
+                    else if(metaType == 'FieldSet')
+                    {
+                        tempXml = tempXml +'<fieldSets>'+x2js.json2xml_str($.parseJSON(tempJSON))+'</fieldSets>';
+                    }
+                    else if(metaType == 'ValidationRule')
+                    {
+                        tempXml = tempXml +'<validationRules>'+x2js.json2xml_str($.parseJSON(tempJSON))+'</validationRules>';
+                    }
+                    else if(metaType == 'AssignmentRule')
+                    {
+                        tempXml = tempXml +'<assignmentRule>'+x2js.json2xml_str($.parseJSON(tempJSON))+'</assignmentRule>';
+                    }
+                    else if(metaType == 'AutoResponseRule')
+                    {
+                        tempXml = tempXml +'<autoResponseRule>'+x2js.json2xml_str($.parseJSON(tempJSON))+'</autoResponseRule>';
+                    }
+                    else if(metaType == 'WorkflowAlert')
+                    {
+                        tempXml = tempXml +'<alerts>'+x2js.json2xml_str($.parseJSON(tempJSON))+'</alerts>';
+                    }
+                    else if(metaType == 'WorkflowFieldUpdate')
+                    {
+                        tempXml = tempXml +'<fieldUpdates>'+x2js.json2xml_str($.parseJSON(tempJSON))+'</fieldUpdates>';
+                    }
+                    else if(metaType == 'WorkflowOutboundMessage')
+                    {
+                        tempXml = tempXml +'<outboundMessages>'+x2js.json2xml_str($.parseJSON(tempJSON))+'</outboundMessages>';
+                    }
+                    else if(metaType == 'WorkflowTask')
+                    {
+                        tempXml = tempXml +'<tasks>'+x2js.json2xml_str($.parseJSON(tempJSON))+'</tasks>';
+                    }
+                    else if(metaType == 'WorkflowRule')
+                    {
+                        tempXml = tempXml +'<rules>'+x2js.json2xml_str($.parseJSON(tempJSON))+'</rules>';
+                    }
+                    else if(metaType == 'SharingCriteriaRule')
+                    {
+                        tempXml = tempXml +'<sharingCriteriaRules>'+x2js.json2xml_str($.parseJSON(tempJSON))+'</sharingCriteriaRules>';
+                    }
+                    else if(metaType == 'SharingOwnerRule')
+                    {
+                        tempXml = tempXml +'<sharingOwnerRules>'+x2js.json2xml_str($.parseJSON(tempJSON))+'</sharingOwnerRules>';
+                    }
+                    else if(metaType == 'EscalationRule')
+                    {
+                        tempXml = tempXml +'<escalationRule>'+x2js.json2xml_str($.parseJSON(tempJSON))+'</escalationRule>';
+                    }
+                    else if(metaType == 'MatchingRule')
+                    {
+                        tempXml = tempXml +'<matchingRules>'+x2js.json2xml_str($.parseJSON(tempJSON))+'</matchingRules>';
+                    }
+                    else if(metaType == 'ManagedTopic')
+                    {
+                        tempXml = tempXml +'<managedTopic>'+x2js.json2xml_str($.parseJSON(tempJSON))+'</managedTopic>';
+                    }
+                    else if(metaType == 'BusinessProcess')
+                    {
+                        tempXml = tempXml +'<businessProcesses>'+x2js.json2xml_str($.parseJSON(tempJSON))+'</businessProcesses>';
+                    }
+                    else if(metaType == 'SharingReason')
+                    {
+                        tempXml = tempXml +'<sharingReasons>'+x2js.json2xml_str($.parseJSON(tempJSON))+'</sharingReasons>';
+                    }
+                    
+                    
+                    //footer
+                    if(metaType == 'CustomLabel')
+                    {
+                        tempXml = tempXml +'</CustomLabels>';
+                    }
+                    else if(metaType == 'AssignmentRule' )
+                    {
+                        tempXml = tempXml +'</AssignmentRules>';
+                    }
+                    else if(metaType == 'AutoResponseRule')
+                    {
+                        tempXml = tempXml +'</AutoResponseRules>';
+                    }
+                    else if(metaType == 'WorkflowAlert' || metaType == 'WorkflowFieldUpdate'|| metaType == 'WorkflowOutboundMessage'|| metaType == 'WorkflowTask' || metaType == 'WorkflowRule')
+                    {
+                        tempXml = tempXml +'</Workflow>';
+                    }
+                    else if(metaType == 'SharingCriteriaRule' || metaType == 'SharingOwnerRule')
+                    {
+                        tempXml = tempXml +'</SharingRules>';
+                    }
+                    else if(metaType == 'EscalationRule')
+                    {
+                        tempXml = tempXml +'</EscalationRules>';
+                    }
+                    else if(metaType == 'MatchingRule')
+                    {
+                        tempXml = tempXml +'</MatchingRules>';
+                    }
+                    else if(metaType == 'ManagedTopic')
+                    {
+                        tempXml = tempXml +'</ManagedTopics>';
+                    }
+                    else
+                    {
+                        tempXml = tempXml +'</CustomObject>';
+                    }
+                    fileMap[metaType+"#"+fullName+""+name]= getCrcWithData(tempXml);
+                }
+            }
+        }
+        
+        function getCrcWithData(zipData)
+        {
+            var r = new Object();
+            r.crc32 = normalZip.crc32(zipData,32);
+            r.data = zipData;
+            return r;
+        }
+        
+        function setDefaultMessageOnPage(str)
+        {
+            if($('#msg') != undefined)
+            {
+                $('#msg').remove();
+            }
+            var parentVal = $("[id$='msg']");
+            if(parentVal != undefined && str!='')
+            {
+                var childVal = '<span id="msg"><span ><div class="message warningM4" role="alert"><table border="0" cellpadding="0" cellspacing="0" class="messageTable" style="padding:0px;margin:0px;"><tbody><tr valign="top"><td><img alt="warning" class="" src="/s.gif" title="warning"></td><td class="messageCell"><div id="j_id0:meta:j_id15:j_id16:j_id18" class="messageText"><span>'+str+'</span></span></span>';
+                parentVal.before(childVal);
+            }
+        }
+        <!-- Girish making changes in LocalDev1 -->
+        function getVisibileState(meta)
+        {
+            if(visibleStateConditionStr != undefined && visibleStateConditionStr != null && visibleStateConditionStr != '' && visibleStateMainFilterList != undefined && visibleStateMainFilterList != null && visibleStateMainFilterList.length > 0)
+            {
+                var tempConditionStr = visibleStateConditionStr.toLowerCase();
+                tempConditionStr = tempConditionStr.replace(/and/g,'&&');
+                tempConditionStr = tempConditionStr.replace(/or/g,'||');
+                try
+                {
+                    for(var index=0; index < visibleStateMainFilterList.length; index++)
+                    {
+                        var filterRow = visibleStateMainFilterList[index];
+                        if(filterRow != undefined && filterRow.value != undefined && filterRow.value != '' && filterRow.operator != undefined && filterRow.operator != '')
+                        {
+                            var fieldValue = meta[filterRow.field];
+                            var filterVal = filterRow.value;
+                            var filterOperator = filterRow.operator;
+                            
+                            if(fieldValue != undefined && filterVal != undefined)
+                            {
+                                fieldValue = fieldValue.toLowerCase();
+                                filterVal = filterVal.toLowerCase();
+                                /*console.log(filterRow);
+                                console.log('fieldValue-------'+fieldValue);
+                                console.log('filterOperator---'+filterOperator);
+                                console.log('filterVal--------'+filterVal);*/
+                                var findStr = ''+(index+1);
+                                if(tempConditionStr.indexOf(findStr) > -1)
+                                {
+                                    var dynamicFilterRegex = new RegExp(findStr, 'g');
+                                    tempConditionStr = tempConditionStr.replace(dynamicFilterRegex, ''+checkValidCondition(fieldValue,filterVal,filterOperator,filterRow.field));
+                                }
+                            }
+                        }
+                    }
+                    var returnVal = eval(tempConditionStr);
+                    return returnVal;
+                }
+                catch(err)
+                {
+                    console.log(err);
+                }
+                return false;
+            }
+            return true;
+        }
+    
+        function checkValidCondition(fieldValue,filterVal,filterOperator,fieldName)
+        {
+            if(filterOperator == 'equals')
+            {
+                if(fieldName == 'type')
+                {
+                    var typeLi = filterVal.split(',');
+                    for(var index = 0; index < typeLi.length; index++)
+                    {
+                        if(fieldValue == typeLi[index])
+                            return true;
+                    }
+                }
+                else
+                {
+                    if(fieldValue == filterVal)
+                    {
+                        return true;
+                    }
+                }
+            }
+            else if(filterOperator == 'not equals')
+            {
+                if(fieldName == 'type')
+                {
+                    var finalResult = true;
+                    var typeLi = filterVal.split(',');
+                    for(var index = 0; index < typeLi.length; index++)
+                    {
+                        if(fieldValue == typeLi[index])
+                        {
+                            finalResult = false;
+                            break;
+                        }
+                    }
+                    return finalResult;
+                }
+                else
+                {
+                    if(fieldValue != filterVal)
+                    {
+                        return true;
+                    }
+                }
+            }
+            else if(filterOperator == 'contains' && fieldValue != undefined && fieldValue != null)
+            {
+                if(fieldName == 'type')
+                {
+                    var typeLi = filterVal.split(',');
+                    for(var index = 0; index < typeLi.length; index++)
+                    {
+                        if(fieldValue.indexOf(typeLi[index]) > -1)
+                            return true;
+                    }
+                }
+                else
+                {
+                    if(fieldValue.indexOf(filterVal) > -1)
+                    {
+                        return true;
+                    }
+                }
+            }
+            else if(filterOperator == 'starts with' && fieldValue != undefined && fieldValue != null)
+            {
+                if(fieldName == 'type')
+                {
+                    var typeLi = filterVal.split(',');
+                    for(var index = 0; index < typeLi.length; index++)
+                    {
+                        if(fieldValue.indexOf(typeLi[index]) == 0)
+                            return true;
+                    }
+                }
+                else
+                {
+                    if((fieldValue.indexOf(filterVal) == 0))
+                    {
+                        return true;
+                    }
+                }
+            }
+            else if(filterOperator == 'does not contain' && fieldValue != undefined && fieldValue != null)
+            {
+                if(fieldName == 'type')
+                {
+                    var finalResult = true;
+                    var typeLi = filterVal.split(',');
+                    for(var index = 0; index < typeLi.length; index++)
+                    {
+                        if(fieldValue.indexOf(typeLi[index])  > -1)
+                        {
+                            finalResult = false;
+                            break;
+                        }
+                    }
+                    return finalResult;
+                }
+                else
+                {
+                    if(fieldValue.indexOf(filterVal) < 0)
+                    {
+                        return true;
+                    }
+                }
+            }
+            return false;
+        }
+        
+        function formatAMPM(date){      
+            var hours = date.getUTCHours();
+            var minutes = date.getUTCMinutes();
+            var Seconds = date.getUTCSeconds();
+            var year = date.getUTCFullYear();
+            var month = date.getUTCMonth()+1;
+            var day = date.getUTCDate();
+            day = day< 10 ? '0'+day : day;
+            month = month < 10 ? '0'+month : month;
+
+            minutes = minutes < 10 ? '0'+minutes : minutes;
+            Seconds = Seconds < 10 ? '0'+Seconds : Seconds;
+            hours = hours < 10 ? '0'+hours : hours;
+            var strTime = year+'-'+month+'-'+day+' '+hours + ':' + minutes +':'+Seconds+' GMT';
+            return strTime;
+        }
+    </script>
+</apex:page>
